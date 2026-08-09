@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 .vite/
 
 /generated/prisma
+
+# Skill eval workspaces (test evidence, not project code)
+.claude/skills/*-workspace/
