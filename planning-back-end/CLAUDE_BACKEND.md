@@ -129,6 +129,28 @@ Toda tentativa de validacao deve ser registrada em `ticket_validations`.
 - Organizador so gerencia seus proprios eventos.
 - Evento passado nao deve ser editado.
 - Evento com reservas/tickets pagos nao deve ser excluido no MVP.
+- `EventSeat.status` e `varchar` livre no schema (nao enum) -- convencao adotada:
+  `"AVAILABLE"` | `"RESERVED"` | `"SOLD"`. Assentos sao gerados na criacao do
+  evento (nao na publicacao), todos como `"AVAILABLE"`, com codigo em linhas de
+  10 (`A1`..`A10`, `B1`..`B10`, ...).
+- Local do evento e um enum fixo `Venue` (`CINE_VERZEL_1`, `CINE_VERZEL_2`) +
+  `room` (inteiro, 1-4) -- 2 cinemas, 4 salas cada, sem tabela de lookup, dado
+  fixo que nao muda durante o teste.
+- Duracao do filme (`ExternalCatalogItem.durationMinutes`) e persistida a
+  partir do `runtime` que a TMDB devolve no endpoint de detalhes. `sessionStatus`
+  (`SCHEDULED`/`STARTED`/`ENDED`) e `sessionEndsAt` sao derivados (nao
+  armazenados), calculados a partir de `startsAt` + duracao + 10min fixos
+  (simulando trailers). Fallback de 120min quando a TMDB nao informa duracao.
+- `startsAt`, `venue` e `room` ficam travados (nao editaveis) se o evento ja
+  tiver reserva `PAID` vinculada -- `title`/`price` continuam livres (preco
+  ja e congelado por reserva em `TicketReservation.totalAmount`).
+- Conflito de horario: dois eventos PUBLISHED na mesma venue+room nao podem
+  ter janelas de sessao sobrepostas (`[startsAt, startsAt + duracao + 10min)`,
+  mesma formula/fallback de `computeSessionStatus`). So evento PUBLISHED
+  ocupa a sala -- DRAFT nunca bloqueia nem e bloqueado. Checado em
+  `POST /events/:id/publish` (sempre) e em `PATCH /events/:id` (so se o
+  evento ja e PUBLISHED e o body muda startsAt/venue/room). Checagem e
+  global (sem filtro de organizador). Erro: 409.
 
 ## API Externa
 
