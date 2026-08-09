@@ -140,7 +140,7 @@ Implementar:
 - filmes em cartaz, se util;
 - snapshot local do item escolhido.
 
-Se `TMDB_API_TOKEN` nao existir ou a API falhar, usar fallback mockado e documentar no README.
+Chamadas reais ao TMDB via `TMDB_ACCESS_TOKEN`; sem fallback mockado — falha da API vira 502.
 
 ## Endpoints Sugeridos
 
@@ -151,8 +151,11 @@ Auth:
 
 Catalogo:
 
-- `GET /catalog/search?query=...`
 - `GET /catalog/now-playing`
+- `GET /catalog/search?query=<termo>`
+- `GET /catalog/movies/:tmdbId`
+
+> Detalhes de autenticacao (Bearer TMDB), parametros de cada endpoint e mapeamento de campos: ver `planning-back-end/teste-verzel-integracao-tmdb-v1.md`.
 
 Eventos:
 
