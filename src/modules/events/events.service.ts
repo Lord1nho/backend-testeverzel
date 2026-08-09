@@ -203,6 +203,34 @@ export async function publishEvent(eventId: string, organizerId: string) {
   return toEventDetail(updated);
 }
 
+// UC7 - Consultar Eventos Publicados: so eventos PUBLISHED, de qualquer
+// organizador. UC8 (busca/filtro) fica fora desta rodada por decisao de
+// escopo.
+export async function listPublishedEvents() {
+  const events = await eventsRepository.findManyPublished();
+  return events.map(toEventSummary);
+}
+
+// UC9 - Visualizar Detalhes do Evento.
+export async function getPublishedEventById(eventId: string) {
+  const event = await eventsRepository.findPublishedById(eventId);
+  if (!event) {
+    throw new AppError("Evento nao encontrado.", 404);
+  }
+  return toEventDetail(event);
+}
+
+// Mapa de assentos do evento publicado -- suporte visual a UC9/UC11 (o
+// Cliente ve quais assentos estao disponiveis antes de reservar).
+export async function getPublishedEventSeats(eventId: string) {
+  const event = await eventsRepository.findPublishedRawById(eventId);
+  if (!event) {
+    throw new AppError("Evento nao encontrado.", 404);
+  }
+  const seats = await eventsRepository.findSeatsByEventId(eventId);
+  return sortSeatsByCode(seats).map(toEventSeat);
+}
+
 export async function deleteEvent(eventId: string, organizerId: string) {
   const event = await findOwnedEventOrThrow(eventId, organizerId);
 

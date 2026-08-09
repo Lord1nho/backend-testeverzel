@@ -1,8 +1,8 @@
 # Events
 
-Criação, configuração, publicação e gerenciamento de eventos pelo Organizador. Implementa UC2 (Criar Evento), o restante de UC3 (persistir o snapshot do item de catálogo — a busca em si é do módulo `catalog`), UC4 (Configurar Evento), UC5 (Publicar Evento) e UC6 (Gerenciar Eventos).
+Criação, configuração, publicação e gerenciamento de eventos pelo Organizador, e navegação pública de eventos publicados pelo Cliente. Implementa UC2 (Criar Evento), o restante de UC3 (persistir o snapshot do item de catálogo — a busca em si é do módulo `catalog`), UC4 (Configurar Evento), UC5 (Publicar Evento), UC6 (Gerenciar Eventos), UC7 (Consultar Eventos Publicados) e UC9 (Visualizar Detalhes do Evento).
 
-**Autenticação:** todas as rotas exigem `authenticate` + `authorizeRole("ORGANIZER")`. Nesta rodada `GET /events`/`GET /events/:id` só retornam os eventos do próprio organizador — a visão pública/multi-papel (UC7, ator Cliente) é um módulo futuro.
+**Autenticação:** as rotas de gerenciamento (`/api/events/*`) exigem `authenticate` + `authorizeRole("ORGANIZER")` e só retornam os eventos do próprio organizador. As rotas públicas (`/api/public/events/*`, ator Cliente) não exigem autenticação — o caso de uso textual não lista "Cliente autenticado" como pré-condição de UC7/UC8/UC9 (só UC10 - Reservar Ingresso exige). UC8 (Buscar e Filtrar Eventos) fica fora desta rodada por decisão de escopo.
 
 ## `POST /api/events`
 
@@ -106,6 +106,28 @@ Exclusão definitiva (hard delete). Bloqueada se `startsAt` já passou, ou se ex
 
 **204 No Content** (sem corpo).
 
+## Rotas públicas (ator Cliente)
+
+Sem autenticação. Mesmos mappers/formato de resposta das rotas do Organizador (`toEventSummary`/`toEventDetail`/`toEventSeat`), mas filtradas por `status: "PUBLISHED"` e sem checagem de dono (qualquer evento publicado, de qualquer organizador).
+
+### `GET /api/public/events`
+
+UC7 - Consultar Eventos Publicados. Lista todos os eventos `PUBLISHED`, ordenados por `startsAt`.
+
+**200 OK:** `{ "events": [...mesmo formato de GET /api/events...] }`
+
+### `GET /api/public/events/:id`
+
+UC9 - Visualizar Detalhes do Evento. Detalhe de um evento publicado.
+
+**200 OK:** mesmo formato de `GET /api/events/:id`. **404** se o evento não existe ou não está `PUBLISHED` (rascunho não deve vazar pro Cliente).
+
+### `GET /api/public/events/:id/seats`
+
+Mapa de assentos do evento publicado (suporte visual a UC9/UC11 — o Cliente vê quais assentos estão disponíveis antes de reservar). **404** se o evento não existe ou não está `PUBLISHED`.
+
+**200 OK:** `{ "seats": [{ "id", "code", "status" }, ...] }`
+
 ## Status de sessão (derivado)
 
 `sessionStatus` e `sessionEndsAt` **não são armazenados** — são calculados a cada resposta a partir de `startsAt` + a duração do filme (`catalogItem.durationMinutes`) + **10 minutos fixos** (simulando o tempo de trailers antes do filme começar de fato):
@@ -135,7 +157,8 @@ Se a TMDB não informar duração pro filme (`durationMinutes` fica `null`/`0` e
 - `events.repository.ts` — único lugar que importa `prisma`. Concentra as transações: criação (upsert do `ExternalCatalogItem`, incluindo `durationMinutes`, + create do `Event` + `createMany` dos `EventSeat`), regeneração de assentos ao mudar capacidade, e exclusão (apaga `EventSeat`s antes do `Event`, por causa do `ON DELETE RESTRICT`). `findPublishedEventsInVenueRoom` busca os candidatos a conflito de horário (índice `@@index([venue, room, status])` em `Event` pra essa query).
 - `events.service.ts` — os 7 casos de uso, `generateSeatCodes(capacity)` (linhas de 10), `findOwnedEventOrThrow` (checagem de dono, reusada por get/update/publish/delete/seats), e `assertNoScheduleConflict` (checagem de conflito de horário, chamada por `publishEvent` sempre e por `updateEvent` quando o evento já é `PUBLISHED`).
 - `events.mappers.ts` — `toEventSummary`/`toEventDetail`/`toEventSeat` + `sortSeatsByCode` (ordena `A10` depois de `A9`, não como string) + `computeSessionStatus`.
-- `events.controller.ts` — 7 handlers finos.
+- `events.controller.ts` — 7 handlers finos (Organizador).
+- `events.public.routes.ts` / `events.public.controller.ts` — 3 rotas públicas (Cliente), sem autenticação. Handlers finos que chamam `listPublishedEvents`/`getPublishedEventById`/`getPublishedEventSeats` em `events.service.ts`, que por sua vez usam `findManyPublished`/`findPublishedById`/`findPublishedRawById` em `events.repository.ts` (sempre filtrando `status: "PUBLISHED"`). `findPublishedEventForReservation` também mora em `events.repository.ts` e é consumida pelo módulo `reservations` (UC10) pra validar o evento sem puxar a lista de seats inteira.
 
 ## Convenção: `EventSeat.status`
 

@@ -132,6 +132,42 @@ export function findSeatsByEventId(eventId: string) {
   return prisma.eventSeat.findMany({ where: { eventId } });
 }
 
+// Visao publica (ator Cliente, UC7/UC9/UC11) -- so evento PUBLISHED, sem
+// filtro de organizador (qualquer cliente pode ver qualquer evento publicado).
+export function findManyPublished() {
+  return prisma.event.findMany({
+    where: { status: "PUBLISHED" },
+    include: eventListInclude,
+    orderBy: { startsAt: "asc" },
+  });
+}
+
+export function findPublishedById(id: string) {
+  return prisma.event.findFirst({
+    where: { id, status: "PUBLISHED" },
+    include: eventDetailInclude,
+  });
+}
+
+// Checagem leve de existencia/publicacao, usada pra nao buscar seats duas
+// vezes (getPublishedEventSeats ja busca os seats separadamente).
+export function findPublishedRawById(id: string) {
+  return prisma.event.findFirst({
+    where: { id, status: "PUBLISHED" },
+    select: { id: true },
+  });
+}
+
+// Usado pelo modulo reservations pra validar o evento antes de reservar
+// assento (UC10) sem puxar a lista de seats inteira, que o reservations
+// nao precisa (ele so precisa do preco e do horario).
+export function findPublishedEventForReservation(id: string) {
+  return prisma.event.findFirst({
+    where: { id, status: "PUBLISHED" },
+    select: { id: true, price: true, startsAt: true },
+  });
+}
+
 export function updateEventFields(eventId: string, data: Prisma.EventUpdateInput) {
   return prisma.event.update({
     where: { id: eventId },
