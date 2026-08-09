@@ -13,7 +13,6 @@ Cria um evento a partir de um filme do TMDB. O backend busca os dados reais do f
 ```json
 {
   "tmdbId": 603,
-  "title": "Sessao Especial - Matrix",
   "startsAt": "2026-09-01T22:00:00.000Z",
   "venue": "CINE_VERZEL_1",
   "room": 3,
@@ -22,7 +21,7 @@ Cria um evento a partir de um filme do TMDB. O backend busca os dados reais do f
 }
 ```
 
-`title` é opcional — se ausente, usa o título do filme (TMDB) como default. `startsAt` precisa ser uma data futura. `venue` é `"CINE_VERZEL_1"` ou `"CINE_VERZEL_2"` (enum fixo — o projeto tem 2 cinemas, 4 salas cada, sem tabela de lookup por ser um dado fixo que não muda durante o teste). `room` é o número da sala, `1` a `4`. `capacity` até 260 (limite do esquema de código de assento).
+Não existe campo `title` no body — de propósito. O nome do evento é **sempre** o título do filme retornado pelo TMDB (`movie.title`), travado no `createEvent` (`events.service.ts`). O organizador não escolhe/edita o nome do evento, nem na criação nem depois via `PATCH` (ver abaixo). `startsAt` precisa ser uma data futura. `venue` é `"CINE_VERZEL_1"` ou `"CINE_VERZEL_2"` (enum fixo — o projeto tem 2 cinemas, 4 salas cada, sem tabela de lookup por ser um dado fixo que não muda durante o teste). `room` é o número da sala, `1` a `4`. `capacity` até 260 (limite do esquema de código de assento).
 
 **201 Created:** `{ "event": {...detalhe, ver abaixo...} }`
 
@@ -78,12 +77,12 @@ Lista os assentos do evento, ordenados por linha e número (`A1, A2, ..., A10, B
 
 ## `PATCH /api/events/:id`
 
-Edita campos do evento. Todos opcionais, mas pelo menos um deve ser informado.
+Edita campos do evento: `startsAt`, `venue`, `room`, `capacity`, `price`. Todos opcionais, mas pelo menos um deve ser informado. **Não existe `title`** — nome do evento é travado no título do TMDB, não editável (ver `POST /api/events` acima).
 
 **Regras:**
 - Evento com `startsAt` já passado não pode ser editado (400).
 - `capacity` só pode mudar enquanto o evento estiver `DRAFT` (400 se já `PUBLISHED`) — mudar `capacity` apaga e regera todos os assentos (seguro, pois `DRAFT` nunca teve venda).
-- `startsAt`, `venue` e `room` ficam travados (400) se existir alguma `TicketReservation` com `status: "PAID"` vinculada ao evento — são os campos que representam o "contrato" com quem já pagou (quando e onde a sessão acontece). `title` e `price` continuam livres mesmo com reserva paga: `title` é cosmético, e `price` é seguro porque `TicketReservation.totalAmount` já congela o valor pago no momento da compra (campo próprio no schema, não recalculado a partir de `Event.price`).
+- `startsAt`, `venue` e `room` ficam travados (400) se existir alguma `TicketReservation` com `status: "PAID"` vinculada ao evento — são os campos que representam o "contrato" com quem já pagou (quando e onde a sessão acontece). `price` continua livre mesmo com reserva paga: é seguro porque `TicketReservation.totalAmount` já congela o valor pago no momento da compra (campo próprio no schema, não recalculado a partir de `Event.price`).
 - Se o evento **já está `PUBLISHED`** e o PATCH muda `startsAt`/`venue`/`room` (e não há reserva paga bloqueando primeiro), verifica **conflito de horário** contra outros eventos `PUBLISHED` na mesma `venue`+`room` (409 se colidir — ver seção abaixo). Evento ainda `DRAFT` nunca é checado aqui — rascunho é livre.
 
 **200 OK:** mesmo formato de `GET /events/:id`.
@@ -166,6 +165,6 @@ No schema Prisma, `EventSeat.status` é `varchar` livre (não enum). Convenção
 
 ## Testes
 
-`tests/events.test.ts` usa Postgres real (mesmo padrão de `tests/auth.test.ts`) — testa a escrita de verdade (transações, upsert, geração de assentos). Só a chamada externa ao TMDB é mockada (`fetchMovieDetails` de `catalog.tmdb-client.ts`, mesmo ponto que `catalog.test.ts` já mocka), pra não depender de rede/token nos testes automatizados. Cobre: criação com geração correta de assentos, reuso do `catalogItem` em criações repetidas, título default, validações (`venue`/`room`/`capacity`/`startsAt`), erro do TMDB propagado, isolamento por organizador (404 pra quem não é dono), regeneração de assentos ao mudar capacidade em `DRAFT`, bloqueio de mudança de capacidade após publicar, bloqueio de edição/publicação/exclusão com data passada, publicar duas vezes, exclusão com reserva paga vinculada, exclusão normal sem erro de FK, trava de `startsAt`/`venue`/`room` com reserva paga (e liberação de `title`/`price`), `sessionStatus` nos 3 estados (`SCHEDULED`/`STARTED`/`ENDED`), o fallback de 120min, e o conflito de horário (dois `DRAFT` coexistindo sem erro, publicar contra outro `PUBLISHED` colidente → 409, sala/venue diferente ou fora da janela → sem erro, `PATCH` de evento `PUBLISHED` pra horário colidente → 409, `PATCH` de `DRAFT` pra horário colidente → sem erro, `PATCH` que não toca campos de agenda nunca dispara a checagem).
+`tests/events.test.ts` usa Postgres real (mesmo padrão de `tests/auth.test.ts`) — testa a escrita de verdade (transações, upsert, geração de assentos). Só a chamada externa ao TMDB é mockada (`fetchMovieDetails` de `catalog.tmdb-client.ts`, mesmo ponto que `catalog.test.ts` já mocka), pra não depender de rede/token nos testes automatizados. Cobre: criação com geração correta de assentos, reuso do `catalogItem` em criações repetidas, título sempre travado no do TMDB (ignora qualquer `title` enviado no body), validações (`venue`/`room`/`capacity`/`startsAt`), erro do TMDB propagado, isolamento por organizador (404 pra quem não é dono), regeneração de assentos ao mudar capacidade em `DRAFT`, bloqueio de mudança de capacidade após publicar, bloqueio de edição/publicação/exclusão com data passada, publicar duas vezes, exclusão com reserva paga vinculada, exclusão normal sem erro de FK, trava de `startsAt`/`venue`/`room` com reserva paga (e liberação de `price`), `sessionStatus` nos 3 estados (`SCHEDULED`/`STARTED`/`ENDED`), o fallback de 120min, e o conflito de horário (dois `DRAFT` coexistindo sem erro, publicar contra outro `PUBLISHED` colidente → 409, sala/venue diferente ou fora da janela → sem erro, `PATCH` de evento `PUBLISHED` pra horário colidente → 409, `PATCH` de `DRAFT` pra horário colidente → sem erro, `PATCH` que não toca campos de agenda nunca dispara a checagem).
 
 Nota de isolamento de teste: como o conflito de horário é checado **globalmente** (sem filtro de organizador — fisicamente só uma sessão por vez na mesma sala), o helper `createTestEvent` usa um `startsAt` padrão único por chamada (contador incremental bem no futuro) pra eventos publicados por testes diferentes nunca colidirem sem querer entre si. Os testes de conflito passam `startsAt`/`venue`/`room` explícitos, cada cenário com um dia bem separado dos outros.

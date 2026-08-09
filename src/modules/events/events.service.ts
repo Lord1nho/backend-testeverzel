@@ -90,7 +90,9 @@ export async function createEvent(organizerId: string, body: CreateEventBody) {
     },
     {
       organizerId,
-      title: body.title?.trim() || movie.title,
+      // Nome do evento travado no titulo do TMDB -- o organizador nao pode
+      // sobrescrever (nem aqui, nem depois via updateEvent).
+      title: movie.title,
       startsAt: new Date(body.startsAt),
       venue: body.venue,
       room: body.room,
@@ -157,7 +159,6 @@ export async function updateEvent(eventId: string, organizerId: string, body: Up
   }
 
   const fields: Prisma.EventUpdateInput = {};
-  if (body.title !== undefined) fields.title = body.title;
   if (body.startsAt !== undefined) fields.startsAt = new Date(body.startsAt);
   if (body.venue !== undefined) fields.venue = body.venue;
   if (body.room !== undefined) fields.room = body.room;

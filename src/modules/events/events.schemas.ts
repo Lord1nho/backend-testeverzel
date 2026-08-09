@@ -23,9 +23,11 @@ const roomSchema = z
   .min(1, { message: "room deve estar entre 1 e 4." })
   .max(4, { message: "room deve estar entre 1 e 4." });
 
+// title NAO entra aqui de proposito: o nome do evento e sempre travado no
+// titulo vindo do TMDB (catalogService.getMovieDetails), o organizador nao
+// pode sobrescrever -- ver createEvent em events.service.ts.
 export const createEventBodySchema = z.object({
   tmdbId: z.coerce.number().int().positive({ message: "tmdbId invalido." }),
-  title: z.string().trim().min(1).optional(),
   startsAt: isoDatetimeSchema,
   venue: venueSchema,
   room: roomSchema,
@@ -43,7 +45,6 @@ export type CreateEventBody = z.infer<typeof createEventBodySchema>;
 // da pra expressar aqui -- ficam no service (updateEvent).
 export const updateEventBodySchema = z
   .object({
-    title: z.string().trim().min(1).optional(),
     startsAt: isoDatetimeSchema.optional(),
     venue: venueSchema.optional(),
     room: roomSchema.optional(),
