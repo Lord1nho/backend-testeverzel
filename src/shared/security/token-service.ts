@@ -7,9 +7,14 @@ type JwtPayload = {
   role: string;
 };
 
+export const ACCESS_TOKEN_COOKIE_NAME = "access_token";
+
+const ACCESS_TOKEN_TTL_SECONDS = 60 * 60 * 24; // 1 dia
+export const ACCESS_TOKEN_MAX_AGE_MS = ACCESS_TOKEN_TTL_SECONDS * 1000;
+
 export function signAccessToken(payload: JwtPayload) {
   return jwt.sign(payload, env.JWT_SECRET, {
-    expiresIn: "1d",
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   });
 }
 
