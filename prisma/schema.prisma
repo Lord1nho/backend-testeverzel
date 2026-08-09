@@ -37,6 +37,13 @@ enum EventStatus {
   @@map("event_status")
 }
 
+enum Venue {
+  CINE_VERZEL_1
+  CINE_VERZEL_2
+
+  @@map("venue")
+}
+
 enum ReservationStatus {
   PENDING_PAYMENT
   PAID
@@ -102,11 +109,12 @@ model ExternalCatalogItem {
   provider    CatalogProvider
   externalId  String          @map("external_id")
   type        CatalogItemType
-  title       String
-  imageUrl    String?         @map("image_url")
-  description String?
-  rawPayload  Json?           @map("raw_payload")
-  createdAt   DateTime        @default(now()) @map("created_at")
+  title           String
+  imageUrl        String?         @map("image_url")
+  description     String?
+  durationMinutes Int?            @map("duration_minutes")
+  rawPayload      Json?           @map("raw_payload")
+  createdAt       DateTime        @default(now()) @map("created_at")
 
   events Event[]
 
@@ -120,7 +128,8 @@ model Event {
   catalogItemId String      @map("catalog_item_id") @db.Uuid
   title         String
   startsAt      DateTime    @map("starts_at")
-  location      String
+  venue         Venue
+  room          Int
   capacity      Int
   price         Decimal     @db.Decimal(10, 2)
   status        EventStatus @default(DRAFT)
@@ -134,6 +143,7 @@ model Event {
   tickets         Ticket[]
   gateValidations GateValidation[]
 
+  @@index([venue, room, status])
   @@map("events")
 }
 

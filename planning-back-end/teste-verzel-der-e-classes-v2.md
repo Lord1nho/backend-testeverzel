@@ -36,6 +36,7 @@ erDiagram
     varchar title
     varchar image_url
     text description
+    int duration_minutes
     json raw_payload
     timestamp created_at
   }
@@ -46,7 +47,8 @@ erDiagram
     uuid catalog_item_id FK
     varchar title
     timestamp starts_at
-    varchar location
+    enum venue
+    int room
     int capacity
     decimal price
     enum status

@@ -23,6 +23,11 @@ Enum event_status {
   CANCELLED
 }
 
+Enum venue {
+  CINE_VERZEL_1
+  CINE_VERZEL_2
+}
+
 Enum reservation_status {
   PENDING_PAYMENT
   PAID
@@ -76,6 +81,7 @@ Table external_catalog_items {
   title varchar [not null]
   image_url varchar
   description text
+  duration_minutes int
   raw_payload json
   created_at timestamp [not null]
 
@@ -92,7 +98,8 @@ Table events {
   catalog_item_id uuid [not null]
   title varchar [not null]
   starts_at timestamp [not null]
-  location varchar [not null]
+  venue venue [not null]
+  room int [not null]
   capacity int [not null]
   price decimal [not null]
   status event_status [not null]
