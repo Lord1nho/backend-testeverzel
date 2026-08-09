@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ORGANIZER
+  CUSTOMER
+  GATE
+
+  @@map("user_role")
+}
+
+enum CatalogProvider {
+  TMDB
+  TICKETMASTER
+
+  @@map("catalog_provider")
+}
+
+enum CatalogItemType {
+  MOVIE
+  SHOW
+
+  @@map("catalog_item_type")
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+
+  @@map("event_status")
+}
+
+enum ReservationStatus {
+  PENDING_PAYMENT
+  PAID
+  PAYMENT_DECLINED
+  CANCELLED
+  EXPIRED
+
+  @@map("reservation_status")
+}
+
+enum PaymentStatus {
+  APPROVED
+  DECLINED
+  PENDING
+  ERROR
+
+  @@map("payment_status")
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+
+  @@map("ticket_status")
+}
+
+enum ValidationInputMethod {
+  QR_CAMERA
+  MANUAL_CODE
+
+  @@map("validation_input_method")
+}
+
+enum ValidationResult {
+  VALID
+  INVALID
+  ALREADY_USED
+  WRONG_EVENT
+
+  @@map("validation_result")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  organizedEvents  Event[]             @relation("OrganizerEvents")
+  reservations     TicketReservation[] @relation("CustomerReservations")
+  tickets          Ticket[]            @relation("CustomerTickets")
+  gateValidations  GateValidation[]    @relation("GateUserValidations")
+
+  @@map("users")
+}
+
+model ExternalCatalogItem {
+  id          String          @id @default(uuid()) @db.Uuid
+  provider    CatalogProvider
+  externalId  String          @map("external_id")
+  type        CatalogItemType
+  title       String
+  imageUrl    String?         @map("image_url")
+  description String?
+  rawPayload  Json?           @map("raw_payload")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  events Event[]
+
+  @@unique([provider, externalId])
+  @@map("external_catalog_items")
+}
+
+model Event {
+  id            String      @id @default(uuid()) @db.Uuid
+  organizerId   String      @map("organizer_id") @db.Uuid
+  catalogItemId String      @map("catalog_item_id") @db.Uuid
+  title         String
+  startsAt      DateTime    @map("starts_at")
+  location      String
+  capacity      Int
+  price         Decimal     @db.Decimal(10, 2)
+  status        EventStatus @default(DRAFT)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  organizer       User                  @relation("OrganizerEvents", fields: [organizerId], references: [id])
+  catalogItem     ExternalCatalogItem   @relation(fields: [catalogItemId], references: [id])
+  seats           EventSeat[]
+  reservations    TicketReservation[]
+  tickets         Ticket[]
+  gateValidations GateValidation[]
+
+  @@map("events")
+}
+
+model EventSeat {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @map("event_id") @db.Uuid
+  code      String
+  status    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event            Event             @relation(fields: [eventId], references: [id])
+  reservationItems ReservationItem[]
+
+  @@unique([eventId, code])
+  @@map("event_seats")
+}
+
+model TicketReservation {
+  id          String            @id @default(uuid()) @db.Uuid
+  customerId  String            @map("customer_id") @db.Uuid
+  eventId     String            @map("event_id") @db.Uuid
+  status      ReservationStatus @default(PENDING_PAYMENT)
+  quantity    Int
+  totalAmount Decimal           @map("total_amount") @db.Decimal(10, 2)
+  expiresAt   DateTime?         @map("expires_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  customer User               @relation("CustomerReservations", fields: [customerId], references: [id])
+  event    Event              @relation(fields: [eventId], references: [id])
+  items    ReservationItem[]
+  payments SimulatedPayment[]
+  tickets  Ticket[]
+
+  @@map("ticket_reservations")
+}
+
+model ReservationItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  reservationId String   @map("reservation_id") @db.Uuid
+  eventSeatId   String   @map("event_seat_id") @db.Uuid
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reservation TicketReservation @relation(fields: [reservationId], references: [id])
+  eventSeat   EventSeat         @relation(fields: [eventSeatId], references: [id])
+
+  @@map("reservation_items")
+}
+
+model SimulatedPayment {
+  id                String        @id @default(uuid()) @db.Uuid
+  reservationId     String        @map("reservation_id") @db.Uuid
+  provider          String
+  providerReference String?       @map("provider_reference")
+  status            PaymentStatus
+  amount            Decimal       @db.Decimal(10, 2)
+  failureReason     String?       @map("failure_reason")
+  paidAt            DateTime?     @map("paid_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  reservation TicketReservation @relation(fields: [reservationId], references: [id])
+
+  @@map("simulated_payments")
+}
+
+model Ticket {
+  id            String       @id @default(uuid()) @db.Uuid
+  reservationId String       @map("reservation_id") @db.Uuid
+  customerId    String       @map("customer_id") @db.Uuid
+  eventId       String       @map("event_id") @db.Uuid
+  code          String       @unique
+  qrTokenHash   String       @map("qr_token_hash")
+  status        TicketStatus @default(VALID)
+  usedAt        DateTime?    @map("used_at")
+  issuedAt      DateTime     @default(now()) @map("issued_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  reservation     TicketReservation @relation(fields: [reservationId], references: [id])
+  customer        User              @relation("CustomerTickets", fields: [customerId], references: [id])
+  event           Event             @relation(fields: [eventId], references: [id])
+  shareLinks      TicketShareLink[]
+  gateValidations GateValidation[]
+
+  @@map("tickets")
+}
+
+model TicketShareLink {
+  id        String    @id @default(uuid()) @db.Uuid
+  ticketId  String    @map("ticket_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+
+  @@map("ticket_share_links")
+}
+
+model GateValidation {
+  id             String                @id @default(uuid()) @db.Uuid
+  ticketId       String?               @map("ticket_id") @db.Uuid
+  gateUserId     String                @map("gate_user_id") @db.Uuid
+  checkedEventId String                @map("checked_event_id") @db.Uuid
+  inputMethod    ValidationInputMethod @map("input_method")
+  result         ValidationResult
+  reason         String?
+  validatedAt    DateTime              @default(now()) @map("validated_at")
+
+  ticket       Ticket? @relation(fields: [ticketId], references: [id])
+  gateUser     User    @relation("GateUserValidations", fields: [gateUserId], references: [id])
+  checkedEvent Event   @relation(fields: [checkedEventId], references: [id])
+
+  @@map("gate_validations")
+}

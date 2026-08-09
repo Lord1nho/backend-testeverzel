@@ -40,6 +40,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+generated/prisma/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
@@ -141,3 +142,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+/generated/prisma

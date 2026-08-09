@@ -1,0 +1,227 @@
+// Teste Verzel - DER para dbdiagram.io - Versao 1
+// Nomes tecnicos em ingles para alinhar banco, ORM, back-end e front-end.
+
+Enum user_role {
+  ORGANIZER
+  CUSTOMER
+  GATE
+}
+
+Enum catalog_provider {
+  TMDB
+  TICKETMASTER
+}
+
+Enum catalog_item_type {
+  MOVIE
+  SHOW
+}
+
+Enum event_status {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+Enum reservation_status {
+  PENDING_PAYMENT
+  PAID
+  PAYMENT_DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+Enum payment_status {
+  APPROVED
+  DECLINED
+  PENDING
+  ERROR
+}
+
+Enum ticket_status {
+  VALID
+  USED
+  CANCELLED
+}
+
+Enum validation_input_method {
+  QR_CAMERA
+  MANUAL_CODE
+}
+
+Enum validation_result {
+  VALID
+  INVALID
+  ALREADY_USED
+  WRONG_EVENT
+}
+
+Table users {
+  id uuid [pk]
+  name varchar [not null]
+  email varchar [not null, unique]
+  password_hash varchar [not null]
+  role user_role [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  Note: 'UC1 - Autenticar-se. Representa Organizador, Cliente e Portaria.'
+}
+
+Table external_catalog_items {
+  id uuid [pk]
+  provider catalog_provider [not null]
+  external_id varchar [not null]
+  type catalog_item_type [not null]
+  title varchar [not null]
+  image_url varchar
+  description text
+  raw_payload json
+  created_at timestamp [not null]
+
+  indexes {
+    (provider, external_id) [unique]
+  }
+
+  Note: 'UC3 - Selecionar item do catalogo externo.'
+}
+
+Table events {
+  id uuid [pk]
+  organizer_id uuid [not null]
+  catalog_item_id uuid [not null]
+  title varchar [not null]
+  starts_at timestamp [not null]
+  location varchar [not null]
+  capacity int [not null]
+  price decimal [not null]
+  status event_status [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  Note: 'UC2, UC4, UC5, UC6 - Criar, configurar, publicar e gerenciar evento.'
+}
+
+Table event_seats {
+  id uuid [pk]
+  event_id uuid [not null]
+  code varchar [not null]
+  status varchar [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (event_id, code) [unique]
+  }
+
+  Note: 'UC11 - Mapa de assentos do evento. code e a identificacao visual do lugar, como A1, A2, B7 ou F12.'
+}
+
+Table ticket_reservations {
+  id uuid [pk]
+  customer_id uuid [not null]
+  event_id uuid [not null]
+  status reservation_status [not null]
+  quantity int [not null]
+  total_amount decimal [not null]
+  expires_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  Note: 'UC10 - Reservar ingresso.'
+}
+
+Table reservation_items {
+  id uuid [pk]
+  reservation_id uuid [not null]
+  event_seat_id uuid [not null]
+  unit_price decimal [not null]
+  created_at timestamp [not null]
+
+  Note: 'Detalha UC11. Para o MVP de cinema, todo item de reserva aponta obrigatoriamente para um assento.'
+}
+
+Table simulated_payments {
+  id uuid [pk]
+  reservation_id uuid [not null]
+  provider varchar [not null]
+  provider_reference varchar
+  status payment_status [not null]
+  amount decimal [not null]
+  failure_reason varchar
+  paid_at timestamp
+  created_at timestamp [not null]
+
+  Note: 'UC12 - Realizar pagamento simulado ou sandbox.'
+}
+
+Table tickets {
+  id uuid [pk]
+  reservation_id uuid [not null]
+  customer_id uuid [not null]
+  event_id uuid [not null]
+  code varchar [not null, unique]
+  qr_token_hash varchar [not null]
+  status ticket_status [not null]
+  used_at timestamp
+  issued_at timestamp [not null]
+  created_at timestamp [not null]
+
+  Note: 'UC14 - Visualizar ingresso. QR Code deve usar codigo/token seguro.'
+}
+
+Table ticket_share_links {
+  id uuid [pk]
+  ticket_id uuid [not null]
+  token_hash varchar [not null, unique]
+  expires_at timestamp
+  created_at timestamp [not null]
+  revoked_at timestamp
+
+  Note: 'UC15 - Compartilhar ingresso por link.'
+}
+
+Table gate_validations {
+  id uuid [pk]
+  ticket_id uuid
+  gate_user_id uuid [not null]
+  checked_event_id uuid [not null]
+  input_method validation_input_method [not null]
+  result validation_result [not null]
+  reason varchar
+  validated_at timestamp [not null]
+
+  Note: 'UC16, UC17, UC18, UC19, UC20 - Validar ingresso na portaria.'
+}
+
+// Multiplicidades principais:
+// users(organizer) 1 - N events
+// external_catalog_items 1 - N events
+// events 1 - N event_seats
+// users(customer) 1 - N ticket_reservations
+// events 1 - N ticket_reservations
+// ticket_reservations 1 - N reservation_items
+// event_seats 1 - N reservation_items historicos; regra de negocio impede mais de uma venda ativa/paga do mesmo assento
+// ticket_reservations 1 - N simulated_payments
+// ticket_reservations 1 - N tickets
+// users(customer) 1 - N tickets
+// events 1 - N tickets
+// tickets 1 - N ticket_share_links
+// tickets 0..1 - N gate_validations
+// users(gate) 1 - N gate_validations
+// events 1 - N gate_validations
+
+Ref: events.organizer_id > users.id
+Ref: events.catalog_item_id > external_catalog_items.id
+Ref: event_seats.event_id > events.id
+Ref: ticket_reservations.customer_id > users.id
+Ref: ticket_reservations.event_id > events.id
+Ref: reservation_items.reservation_id > ticket_reservations.id
+Ref: reservation_items.event_seat_id > event_seats.id
+Ref: simulated_payments.reservation_id > ticket_reservations.id
+Ref: tickets.reservation_id > ticket_reservations.id
+Ref: tickets.customer_id > users.id
+Ref: tickets.event_id > events.id
+Ref: ticket_share_links.ticket_id > tickets.id
+Ref: gate_validations.ticket_id > tickets.id
+Ref: gate_validations.gate_user_id > users.id
+Ref: gate_validations.checked_event_id > events.id

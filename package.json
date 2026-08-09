@@ -1,0 +1,67 @@
+{
+  "name": "backend-testeverzel",
+  "version": "1.0.0",
+  "description": "Backend da Plataforma de Eventos e Ingressos do teste tecnico Verzel.",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "npm run prisma:generate && tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lord1nho/backend-testeverzel.git"
+  },
+  "keywords": [
+    "express",
+    "typescript",
+    "prisma",
+    "postgres"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Lord1nho/backend-testeverzel/issues"
+  },
+  "homepage": "https://github.com/Lord1nho/backend-testeverzel#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.8.1",
+    "prisma": "^7.9.1",
+    "supertest": "^7.2.2",
+    "tsx": "^4.23.11",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.0",
+    "zod": "^4.4.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
