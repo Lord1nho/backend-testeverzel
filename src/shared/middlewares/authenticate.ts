@@ -16,7 +16,13 @@ export const authenticate: RequestHandler = (request, _response, next) => {
   }
 
   const token = authorization.replace("Bearer ", "");
-  const payload = verifyAccessToken(token);
+
+  let payload;
+  try {
+    payload = verifyAccessToken(token);
+  } catch {
+    throw new AppError("Token invalido ou expirado.", 401);
+  }
 
   request.user = {
     id: payload.sub,
