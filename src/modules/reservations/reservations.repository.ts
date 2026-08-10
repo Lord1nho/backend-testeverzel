@@ -5,6 +5,7 @@ import type { Prisma } from "../../../generated/prisma/client.js";
 const reservationDetailInclude = {
   event: true,
   items: { include: { eventSeat: true } },
+  tickets: true,
 } satisfies Prisma.TicketReservationInclude;
 
 type CreateReservationInput = {
@@ -68,5 +69,47 @@ export function findByIdAndCustomer(id: string, customerId: string) {
   return prisma.ticketReservation.findFirst({
     where: { id, customerId },
     include: reservationDetailInclude,
+  });
+}
+
+// Libera o assento pro Cliente que desiste ANTES de tentar pagar (sem essa
+// rota, o unico jeito do assento voltar pra AVAILABLE era via recusa de
+// pagamento ou expiracao -- ver payments.repository.ts). Mesmo recheck
+// dentro da transacao da reserva-segura: o UPDATE condicional
+// (status: "PENDING_PAYMENT" no WHERE) protege contra corrida com um
+// pagamento concorrente pra mesma reserva.
+export async function cancelReservation(id: string, customerId: string) {
+  return prisma.$transaction(async (tx) => {
+    const reservation = await tx.ticketReservation.findFirst({
+      where: { id, customerId },
+      include: { items: true },
+    });
+
+    if (!reservation) {
+      return null;
+    }
+
+    if (reservation.status !== "PENDING_PAYMENT") {
+      throw new AppError("Reserva nao pode ser cancelada nesse estado.", 400);
+    }
+
+    const cancelled = await tx.ticketReservation.updateMany({
+      where: { id, status: "PENDING_PAYMENT" },
+      data: { status: "CANCELLED" },
+    });
+
+    if (cancelled.count !== 1) {
+      throw new AppError("Reserva nao pode ser cancelada nesse estado.", 400);
+    }
+
+    await tx.eventSeat.updateMany({
+      where: { id: { in: reservation.items.map((item) => item.eventSeatId) }, status: "RESERVED" },
+      data: { status: "AVAILABLE" },
+    });
+
+    return tx.ticketReservation.findUniqueOrThrow({
+      where: { id },
+      include: reservationDetailInclude,
+    });
   });
 }

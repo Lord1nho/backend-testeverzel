@@ -1,8 +1,8 @@
 # Guia de Integração Frontend — Fluxo do Cliente
 
-Este guia cobre a jornada do **Cliente** (ator) na Plataforma de Eventos e Ingressos: consultar eventos publicados, ver detalhes, escolher assentos e reservar ingresso. Corresponde a **UC7, UC9, UC10 e UC11** do [documento de casos de uso](planning-back-end/teste-verzel-casos-de-uso-textual-v1.md).
+Este guia cobre a jornada completa do **Cliente** (ator) na Plataforma de Eventos e Ingressos: consultar eventos publicados, ver detalhes, escolher assentos, reservar, pagar (simulado), ver o ingresso e compartilhar por link. Corresponde a **UC7, UC9, UC10, UC11, UC12, UC13, UC14 e UC15** do [documento de casos de uso](planning-back-end/teste-verzel-casos-de-uso-textual-v1.md).
 
-> **Fora do ar por enquanto:** UC8 (busca/filtro), UC12 (pagamento simulado), UC13-15 (Meus Ingressos / QR Code / compartilhar) e UC16-20 (portaria). A reserva criada aqui fica em `PENDING_PAYMENT` — nenhum ticket é emitido ainda, porque o fluxo de pagamento é um módulo futuro.
+> **Fora do ar por enquanto:** UC8 (busca/filtro) e UC16-20 (portaria — validar ingresso na entrada). Todo o resto do fluxo do Cliente, da navegação até o ingresso com QR, já está implementado.
 
 ## Base URL
 
@@ -39,7 +39,13 @@ cliente2@demo.com / 123456   (role CUSTOMER)
 3. GET  /api/public/events/:id/seats        -> mapa de assentos (pintar disponível/ocupado)
 4. POST /api/auth/login                     -> se o cliente ainda não estiver logado
 5. POST /api/reservations                   -> reserva os assentos escolhidos
-6. GET  /api/reservations/:id               -> tela de confirmação / status da reserva
+   ├─ POST /api/reservations/:id/cancel     -> desistiu antes de pagar? libera os assentos
+6. GET  /api/reservations/:id               -> tela de checkout / status da reserva
+7. POST /api/payments                       -> paga a reserva (aprovado ou recusado)
+8. GET  /api/tickets                        -> Meus Ingressos
+9. GET  /api/tickets/:id                    -> tela do ingresso com QR
+10. POST /api/tickets/:id/share             -> gera link pra compartilhar
+    GET  /api/public/tickets/:token         -> quem recebe o link abre sem login
 ```
 
 Não existe carrinho: a seleção de assentos (UC11) acontece no cliente (frontend) enquanto o usuário navega pelo mapa de assentos, e é enviada de uma vez só no passo 5.
@@ -196,14 +202,15 @@ curl -b cookiejar.txt -s -X POST http://localhost:3333/api/reservations \
     "seats": [
       { "id": "seat-uuid-1", "code": "A1" },
       { "id": "seat-uuid-2", "code": "A2" }
-    ]
+    ],
+    "tickets": []
   }
 }
 ```
 
-Depois do `201`, os assentos escolhidos já saem do mapa como `RESERVED` (bloqueio temporário) — nenhum outro cliente consegue reservá-los enquanto essa reserva existir. `status` sempre volta `PENDING_PAYMENT`: **não existe fluxo de pagamento ainda**, então a tela pós-reserva deve deixar isso explícito pro usuário (algo como "reserva confirmada, pagamento em breve") em vez de simular uma confirmação de compra.
+Depois do `201`, os assentos escolhidos já saem do mapa como `RESERVED` (bloqueio temporário) — nenhum outro cliente consegue reservá-los enquanto essa reserva existir. `status` sempre volta `PENDING_PAYMENT`; a tela seguinte é o checkout (passo 7 — pagar). `tickets` vem vazio aqui e só se popula depois do pagamento aprovado.
 
-`expiresAt` é só informativo (janela de 15 minutos) — o backend **não** expira/libera o assento automaticamente ainda (isso é responsabilidade do futuro módulo de pagamento). Não construa lógica de contagem regressiva que dependa do backend liberar o assento sozinho.
+`expiresAt` é a janela do bloqueio (15 minutos) — checada no momento em que o Cliente tenta pagar (passo 7), não por um timer em segundo plano. Se o Cliente demorar demais no checkout, o `POST /api/payments` retorna `400` (reserva expirada) e os assentos já voltam a aparecer como `AVAILABLE`; a tela deve tratar isso mandando o Cliente reservar de novo.
 
 ### Erros
 
@@ -224,9 +231,134 @@ Requer login como o mesmo `CUSTOMER` dono da reserva.
 curl -b cookiejar.txt http://localhost:3333/api/reservations/reservation-uuid
 ```
 
-**200 OK:** mesmo formato do `reservation` do passo 5.
+**200 OK:** mesmo formato do `reservation` do passo 5 — reflete `status`/`tickets` atualizados depois de um pagamento.
 
 **404** se a reserva não existir **ou** pertencer a outro cliente (o backend nunca diferencia os dois casos, pra não vazar que um ID existe).
+
+## 6.5. `POST /api/reservations/:id/cancel` — desistir antes de pagar
+
+Requer login como o mesmo `CUSTOMER` dono da reserva. Usa quando o Cliente sai da tela de checkout sem pagar (botão "cancelar"/"voltar") — libera os assentos na hora, sem precisar esperar nada expirar.
+
+```bash
+curl -b cookiejar.txt -X POST http://localhost:3333/api/reservations/reservation-uuid/cancel
+```
+
+**200 OK:** mesmo formato do `reservation`, com `status: "CANCELLED"`. **400** se a reserva já não está `PENDING_PAYMENT` (já paga, recusada, expirada ou já cancelada). **404** mesma regra de dono do passo 6.
+
+## 7. `POST /api/payments` — UC12 (Realizar Pagamento Simulado)
+
+Requer login como `CUSTOMER`. **Não é uma transação financeira real.**
+
+```bash
+curl -b cookiejar.txt -s -X POST http://localhost:3333/api/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reservationId": "reservation-uuid",
+    "card": {
+      "number": "4111111111111111",
+      "holderName": "Fulano de Tal",
+      "expiryMonth": 12,
+      "expiryYear": 2030,
+      "cvv": "123"
+    }
+  }'
+```
+
+### Regra de aprovação/recusa (pra testar os dois fluxos)
+
+Número de cartão **terminado em `0000`** → sempre **recusado**. Qualquer outro número (formato válido: 13-19 dígitos) → sempre **aprovado**. Não há checagem real de cartão — é só essa convenção, pra dar controle determinístico no teste do checkout.
+
+**200 OK (aprovado):**
+
+```json
+{
+  "payment": { "id": "uuid", "status": "APPROVED", "amount": 71.0, "failureReason": null, "paidAt": "..." },
+  "reservationStatus": "PAID",
+  "tickets": [
+    { "id": "ticket-uuid-1", "code": "A1B2C3D4", "status": "VALID" },
+    { "id": "ticket-uuid-2", "code": "E5F6G7H8", "status": "VALID" }
+  ]
+}
+```
+
+**200 OK (recusado):**
+
+```json
+{
+  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartao recusado pelo emissor (simulado).", "paidAt": null },
+  "reservationStatus": "PAYMENT_DECLINED",
+  "tickets": []
+}
+```
+
+Se recusado, os assentos voltam pra `AVAILABLE` — o Cliente precisa reservar de novo (passo 5) pra tentar outra vez; **não dá pra reenviar pagamento na mesma reserva**. `tickets` aqui é só o resumo (`id`/`code`/`status`) — use `GET /api/tickets/:id` (passo 9) pra ver o QR de cada um.
+
+### Erros
+
+| Status | Quando | O que fazer na UI |
+| --- | --- | --- |
+| 400 | corpo inválido (cartão/validade/CVV mal formatados) | validação de formulário |
+| 400 | reserva não está `PENDING_PAYMENT`, ou expirou | mandar reservar de novo |
+| 401 | sem login | redirecionar pro login |
+| 403 | logado, mas não é `CUSTOMER` | não deveria acontecer no app do cliente |
+| 404 | reserva não existe ou pertence a outro cliente | recarregar |
+| 409 | outra tentativa de pagamento na mesma reserva já processou primeiro | recarregar `GET /api/reservations/:id` pra ver o resultado real |
+
+## 8. `GET /api/tickets` — UC13 (Visualizar Meus Ingressos)
+
+Requer login como `CUSTOMER`. Lista os ingressos do Cliente, mais próximos primeiro.
+
+```bash
+curl -b cookiejar.txt http://localhost:3333/api/tickets
+```
+
+**200 OK:**
+
+```json
+{
+  "tickets": [
+    {
+      "id": "ticket-uuid",
+      "status": "VALID",
+      "code": "A1B2C3D4",
+      "issuedAt": "...",
+      "usedAt": null,
+      "event": { "id": "uuid", "title": "Clube da Luta", "startsAt": "...", "venue": "CINE_VERZEL_1", "room": 3 },
+      "seat": { "id": "seat-uuid", "code": "A1" }
+    }
+  ]
+}
+```
+
+## 9. `GET /api/tickets/:id` — UC14 (Visualizar Ingresso)
+
+Requer login como o dono. **404** se não é do Cliente autenticado.
+
+```bash
+curl -b cookiejar.txt http://localhost:3333/api/tickets/ticket-uuid
+```
+
+**200 OK:** mesmo formato do item da lista, mais `"qrValue": "A1B2C3D4.9f2e...<64 chars hex>"`.
+
+`qrValue` é a string a codificar num QR Code **no frontend** (o backend não gera imagem — ver `tickets/README.md` pra entender o formato `codigo.assinatura` e por que ele é recalculável a cada chamada, não um segredo que só existe uma vez).
+
+## 10. Compartilhar ingresso (UC15)
+
+**`POST /api/tickets/:id/share`** (autenticado, dono do ingresso):
+
+```bash
+curl -b cookiejar.txt -X POST http://localhost:3333/api/tickets/ticket-uuid/share
+```
+
+**201 Created:** `{ "shareLink": { "token": "aB3d...", "expiresAt": null } }` — o `token` só aparece **nesta resposta**; monte a URL de compartilhamento no frontend (ex: `https://seu-app.com/ingressos/compartilhado/<token>`) apontando pro passo seguinte.
+
+**`GET /api/public/tickets/:token`** (sem autenticação — é a tela que quem recebe o link abre):
+
+```bash
+curl http://localhost:3333/api/public/tickets/aB3d...
+```
+
+**200 OK:** mesmo formato do passo 9 (inclui `qrValue`). **404** se o token não existe, foi revogado ou expirou.
 
 ---
 
@@ -240,5 +372,11 @@ curl -b cookiejar.txt http://localhost:3333/api/reservations/reservation-uuid
 | POST | `/api/auth/login` | nenhuma | UC1 |
 | POST | `/api/reservations` | `CUSTOMER` | UC10 + UC11 |
 | GET | `/api/reservations/:id` | `CUSTOMER` (dono) | UC10 |
+| POST | `/api/reservations/:id/cancel` | `CUSTOMER` (dono) | UC10 (desistir antes de pagar) |
+| POST | `/api/payments` | `CUSTOMER` | UC12 |
+| GET | `/api/tickets` | `CUSTOMER` | UC13 |
+| GET | `/api/tickets/:id` | `CUSTOMER` (dono) | UC14 |
+| POST | `/api/tickets/:id/share` | `CUSTOMER` (dono) | UC15 |
+| GET | `/api/public/tickets/:token` | nenhuma | UC15 (view compartilhada) |
 
-Documentação completa de cada módulo (incluindo o lado do Organizador, que o app do cliente não usa): [src/modules/events/README.md](src/modules/events/README.md) e [src/modules/reservations/README.md](src/modules/reservations/README.md).
+Documentação completa de cada módulo (incluindo o lado do Organizador, que o app do cliente não usa): [src/modules/events/README.md](src/modules/events/README.md), [src/modules/reservations/README.md](src/modules/reservations/README.md), [src/modules/payments/README.md](src/modules/payments/README.md) e [src/modules/tickets/README.md](src/modules/tickets/README.md).

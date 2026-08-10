@@ -339,4 +339,96 @@ describe("reservations (UC10 - Reservar Ingresso / UC11 - Selecionar Assento)", 
       expect(response.status).toBe(404);
     });
   });
+
+  describe("POST /api/reservations/:id/cancel", () => {
+    it("libera os assentos e marca CANCELLED, mesmo sem tentativa de pagamento previa", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+
+      const created = await request(app)
+        .post("/api/reservations")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ eventId: event.id, seatIds: seatIds.slice(0, 2) });
+
+      const cancelResponse = await request(app)
+        .post(`/api/reservations/${created.body.reservation.id}/cancel`)
+        .set("Authorization", `Bearer ${customer1Token}`);
+
+      expect(cancelResponse.status).toBe(200);
+      expect(cancelResponse.body.reservation.status).toBe("CANCELLED");
+
+      const seatsResponse = await request(app).get(`/api/public/events/${event.id}/seats`);
+      const reserved = seatsResponse.body.seats.filter((seat: { status: string }) => seat.status === "RESERVED");
+      expect(reserved).toHaveLength(0);
+
+      const otherCustomer = await request(app)
+        .post("/api/reservations")
+        .set("Authorization", `Bearer ${customer2Token}`)
+        .send({ eventId: event.id, seatIds: seatIds.slice(0, 2) });
+      expect(otherCustomer.status).toBe(201);
+    });
+
+    it("retorna 400 ao cancelar uma reserva que ja nao esta PENDING_PAYMENT", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+
+      const created = await request(app)
+        .post("/api/reservations")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ eventId: event.id, seatIds: seatIds.slice(0, 1) });
+
+      const firstCancel = await request(app)
+        .post(`/api/reservations/${created.body.reservation.id}/cancel`)
+        .set("Authorization", `Bearer ${customer1Token}`);
+      expect(firstCancel.status).toBe(200);
+
+      const secondCancel = await request(app)
+        .post(`/api/reservations/${created.body.reservation.id}/cancel`)
+        .set("Authorization", `Bearer ${customer1Token}`);
+      expect(secondCancel.status).toBe(400);
+    });
+
+    it("retorna 404 pra reserva de outro cliente ou inexistente", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+
+      const created = await request(app)
+        .post("/api/reservations")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ eventId: event.id, seatIds: seatIds.slice(0, 1) });
+
+      const otherResponse = await request(app)
+        .post(`/api/reservations/${created.body.reservation.id}/cancel`)
+        .set("Authorization", `Bearer ${customer2Token}`);
+      expect(otherResponse.status).toBe(404);
+
+      const nonExistentResponse = await request(app)
+        .post("/api/reservations/00000000-0000-0000-0000-000000000000/cancel")
+        .set("Authorization", `Bearer ${customer1Token}`);
+      expect(nonExistentResponse.status).toBe(404);
+    });
+
+    it("retorna 401 sem token e 403 para ORGANIZER/GATE", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+      const created = await request(app)
+        .post("/api/reservations")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ eventId: event.id, seatIds: seatIds.slice(0, 1) });
+      const reservationId = created.body.reservation.id;
+
+      const noAuthResponse = await request(app).post(`/api/reservations/${reservationId}/cancel`);
+      expect(noAuthResponse.status).toBe(401);
+
+      const organizerResponse = await request(app)
+        .post(`/api/reservations/${reservationId}/cancel`)
+        .set("Authorization", `Bearer ${organizerAsCustomerToken()}`);
+      expect(organizerResponse.status).toBe(403);
+
+      const gateResponse = await request(app)
+        .post(`/api/reservations/${reservationId}/cancel`)
+        .set("Authorization", `Bearer ${gateToken}`);
+      expect(gateResponse.status).toBe(403);
+    });
+  });
 });

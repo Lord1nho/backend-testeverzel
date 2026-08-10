@@ -41,3 +41,13 @@ export async function getReservationById(customerId: string, reservationId: stri
   }
   return toReservationDetail(reservation);
 }
+
+// Cliente desiste ANTES de tentar pagar -- libera o assento sem precisar
+// passar pelo modulo payments. So permitido enquanto PENDING_PAYMENT.
+export async function cancelReservation(customerId: string, reservationId: string) {
+  const reservation = await reservationsRepository.cancelReservation(reservationId, customerId);
+  if (!reservation) {
+    throw new AppError("Reserva nao encontrada.", 404);
+  }
+  return toReservationDetail(reservation);
+}

@@ -1,9 +1,10 @@
 import { sortSeatsByCode } from "../events/events.mappers.js";
-import type { Event, EventSeat, ReservationItem, TicketReservation } from "../../../generated/prisma/client.js";
+import type { Event, EventSeat, ReservationItem, Ticket, TicketReservation } from "../../../generated/prisma/client.js";
 
 type ReservationDetailRow = TicketReservation & {
   event: Event;
   items: (ReservationItem & { eventSeat: EventSeat })[];
+  tickets: Ticket[];
 };
 
 export function toReservationDetail(reservation: ReservationDetailRow) {
@@ -24,5 +25,7 @@ export function toReservationDetail(reservation: ReservationDetailRow) {
       room: reservation.event.room,
     },
     seats: seats.map((seat) => ({ id: seat.id, code: seat.code })),
+    // Vazio ate o pagamento ser aprovado (UC12) -- ver payments module.
+    tickets: reservation.tickets.map((ticket) => ({ id: ticket.id, code: ticket.code, status: ticket.status })),
   };
 }

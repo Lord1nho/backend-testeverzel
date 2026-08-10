@@ -16,3 +16,9 @@ export const getReservationController: RequestHandler = async (request, response
   const reservation = await reservationsService.getReservationById(request.user!.id, id);
   response.status(200).json({ reservation });
 };
+
+export const cancelReservationController: RequestHandler = async (request, response) => {
+  const { id } = request.params as unknown as ReservationIdParam;
+  const reservation = await reservationsService.cancelReservation(request.user!.id, id);
+  response.status(200).json({ reservation });
+};
