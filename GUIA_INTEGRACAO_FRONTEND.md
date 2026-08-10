@@ -2,7 +2,7 @@
 
 Este guia cobre a jornada completa do **Cliente** (ator) na Plataforma de Eventos e Ingressos: consultar eventos publicados, ver detalhes, escolher assentos, reservar, pagar (simulado), ver o ingresso e compartilhar por link. Corresponde a **UC7, UC9, UC10, UC11, UC12, UC13, UC14 e UC15** do [documento de casos de uso](planning-back-end/teste-verzel-casos-de-uso-textual-v1.md).
 
-> **Fora do ar por enquanto:** UC8 (busca/filtro) e UC16-20 (portaria — validar ingresso na entrada). Todo o resto do fluxo do Cliente, da navegação até o ingresso com QR, já está implementado.
+> **Fora do ar por enquanto:** só UC8 (busca/filtro), que ficou fora de escopo. Todo o resto do fluxo do Cliente, da navegação até o ingresso com QR, já está implementado. UC16-20 (portaria) também já existe (`POST /api/gate/validate`, ver [src/modules/gate/README.md](src/modules/gate/README.md)), mas é usado pelo app da portaria, não pelo app do Cliente que este guia cobre.
 
 ## Base URL
 
@@ -24,10 +24,10 @@ Só a etapa final (reservar) exige login. Navegar pelos eventos é público.
 
 Detalhes completos, atributos do cookie e exemplos de curl: [src/modules/auth/README.md](src/modules/auth/README.md).
 
-Usuários de teste (seed ainda não implementado — criar manualmente por enquanto, ver `README.md` raiz):
+Usuários de teste (criados pelo seed, `npm run prisma:seed` — ver `README.md` raiz):
 
 ```
-cliente1@demo.com / 123456   (role CUSTOMER)
+cliente1@demo.com / 123456   (role CUSTOMER, já com 1 ingresso pago)
 cliente2@demo.com / 123456   (role CUSTOMER)
 ```
 
@@ -380,3 +380,9 @@ curl http://localhost:3333/api/public/tickets/aB3d...
 | GET | `/api/public/tickets/:token` | nenhuma | UC15 (view compartilhada) |
 
 Documentação completa de cada módulo (incluindo o lado do Organizador, que o app do cliente não usa): [src/modules/events/README.md](src/modules/events/README.md), [src/modules/reservations/README.md](src/modules/reservations/README.md), [src/modules/payments/README.md](src/modules/payments/README.md) e [src/modules/tickets/README.md](src/modules/tickets/README.md).
+
+## Base URL de produção
+
+Depois do deploy (ver seção "Deploy" do `README.md` raiz), a API roda no Render em `https://<seu-servico>.onrender.com/api` — troque a Base URL da seção 1 deste guia por essa URL no build de produção do frontend (variável de ambiente do projeto na Vercel). O plano free do Render "dorme" após inatividade: a primeira requisição depois de um tempo parado pode demorar alguns segundos a mais para responder (não é bug).
+
+O cookie de sessão só atravessa domínios diferentes (frontend na Vercel, backend no Render) porque em produção ele sai com `sameSite: "none"` + `secure: true` (ver `src/modules/auth/auth.controller.ts`) — o frontend precisa mandar `credentials: "include"` (fetch) ou `withCredentials: true` (axios) em toda chamada, como já indicado na seção "Autenticação".
