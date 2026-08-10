@@ -5,9 +5,15 @@ import { ACCESS_TOKEN_COOKIE_NAME, ACCESS_TOKEN_MAX_AGE_MS } from "../../shared/
 import * as authService from "./auth.service.js";
 import type { LoginBody } from "./auth.schemas.js";
 
+// sameSite "none" e obrigatorio em producao pra o cookie de sessao
+// sobreviver a um request cross-site (frontend na Vercel, backend em outro
+// dominio) -- a maioria dos browsers descarta um cookie "lax" em
+// fetch/axios entre dominios diferentes. Exige secure: true junto, que ja
+// e condicional a NODE_ENV=production. Em dev fica "lax" (front e back no
+// mesmo localhost, sem exigir HTTPS local).
 const accessTokenCookieOptions: CookieOptions = {
   httpOnly: true,
-  sameSite: "lax",
+  sameSite: env.NODE_ENV === "production" ? "none" : "lax",
   secure: env.NODE_ENV === "production",
   path: "/",
 };
