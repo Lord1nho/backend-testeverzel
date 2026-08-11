@@ -43,7 +43,7 @@ export type TmdbMovieDetails = Omit<TmdbMovieSummary, "genre_ids"> & {
 
 async function tmdbFetch<T>(path: string, searchParams: Record<string, string | undefined> = {}): Promise<T> {
   if (!env.TMDB_ACCESS_TOKEN) {
-    throw new AppError("TMDB_ACCESS_TOKEN nao configurado no servidor.", 500);
+    throw new AppError("TMDB_ACCESS_TOKEN não configurado no servidor.", 500);
   }
 
   const url = new URL(`${env.TMDB_BASE_URL}${path}`);

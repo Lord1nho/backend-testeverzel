@@ -8,13 +8,13 @@ const MAX_CAPACITY = 260;
 
 const isoDatetimeSchema = z
   .string()
-  .datetime({ message: "startsAt deve ser uma data ISO 8601 valida." })
+  .datetime({ message: "startsAt deve ser uma data ISO 8601 válida." })
   .refine((value) => new Date(value).getTime() > Date.now(), {
     message: "startsAt deve ser uma data futura.",
   });
 
 const venueSchema = z.nativeEnum(Venue, {
-  message: "venue invalido. Use CINE_VERZEL_1 ou CINE_VERZEL_2.",
+  message: "venue inválido. Use CINE_VERZEL_1 ou CINE_VERZEL_2.",
 });
 
 const roomSchema = z
@@ -27,7 +27,7 @@ const roomSchema = z
 // titulo vindo do TMDB (catalogService.getMovieDetails), o organizador nao
 // pode sobrescrever -- ver createEvent em events.service.ts.
 export const createEventBodySchema = z.object({
-  tmdbId: z.coerce.number().int().positive({ message: "tmdbId invalido." }),
+  tmdbId: z.coerce.number().int().positive({ message: "tmdbId inválido." }),
   startsAt: isoDatetimeSchema,
   venue: venueSchema,
   room: roomSchema,
@@ -35,8 +35,8 @@ export const createEventBodySchema = z.object({
     .number()
     .int()
     .positive({ message: "capacity deve ser um inteiro positivo." })
-    .max(MAX_CAPACITY, { message: `capacity nao pode ultrapassar ${MAX_CAPACITY}.` }),
-  price: z.number().nonnegative({ message: "price nao pode ser negativo." }),
+    .max(MAX_CAPACITY, { message: `capacity não pode ultrapassar ${MAX_CAPACITY}.` }),
+  price: z.number().nonnegative({ message: "price não pode ser negativo." }),
 });
 export type CreateEventBody = z.infer<typeof createEventBodySchema>;
 
@@ -52,7 +52,7 @@ export const updateEventBodySchema = z
       .number()
       .int()
       .positive({ message: "capacity deve ser um inteiro positivo." })
-      .max(MAX_CAPACITY, { message: `capacity nao pode ultrapassar ${MAX_CAPACITY}.` })
+      .max(MAX_CAPACITY, { message: `capacity não pode ultrapassar ${MAX_CAPACITY}.` })
       .optional(),
     price: z.number().nonnegative().optional(),
   })
@@ -62,6 +62,6 @@ export const updateEventBodySchema = z
 export type UpdateEventBody = z.infer<typeof updateEventBodySchema>;
 
 export const eventIdParamSchema = z.object({
-  id: z.string().uuid({ message: "id invalido." }),
+  id: z.string().uuid({ message: "id inválido." }),
 });
 export type EventIdParam = z.infer<typeof eventIdParamSchema>;

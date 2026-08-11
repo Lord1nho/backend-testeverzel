@@ -5,7 +5,7 @@ import { findUserByEmail, findUserById } from "./auth.repository.js";
 import { toPublicUser } from "./auth.mappers.js";
 import type { LoginBody } from "./auth.schemas.js";
 
-const INVALID_CREDENTIALS_MESSAGE = "Credenciais invalidas.";
+const INVALID_CREDENTIALS_MESSAGE = "Credenciais inválidas.";
 
 export async function login({ email, password }: LoginBody) {
   const user = await findUserByEmail(email);
@@ -32,7 +32,7 @@ export async function getMe(userId: string) {
   const user = await findUserById(userId);
 
   if (!user) {
-    throw new AppError("Usuario nao encontrado.", 401);
+    throw new AppError("Usuário não encontrado.", 401);
   }
 
   return toPublicUser(user);

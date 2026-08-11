@@ -6,20 +6,20 @@ import { z } from "zod";
 const MAX_SEATS_PER_RESERVATION = 10;
 
 export const createReservationBodySchema = z.object({
-  eventId: z.string().uuid({ message: "eventId invalido." }),
+  eventId: z.string().uuid({ message: "eventId inválido." }),
   seatIds: z
-    .array(z.string().uuid({ message: "seatId invalido." }))
+    .array(z.string().uuid({ message: "seatId inválido." }))
     .min(1, { message: "Selecione ao menos um assento." })
     .max(MAX_SEATS_PER_RESERVATION, {
-      message: `Selecione no maximo ${MAX_SEATS_PER_RESERVATION} assentos por reserva.`,
+      message: `Selecione no máximo ${MAX_SEATS_PER_RESERVATION} assentos por reserva.`,
     })
     .refine((seatIds) => new Set(seatIds).size === seatIds.length, {
-      message: "seatIds nao pode conter assentos duplicados.",
+      message: "seatIds não pode conter assentos duplicados.",
     }),
 });
 export type CreateReservationBody = z.infer<typeof createReservationBodySchema>;
 
 export const reservationIdParamSchema = z.object({
-  id: z.string().uuid({ message: "id invalido." }),
+  id: z.string().uuid({ message: "id inválido." }),
 });
 export type ReservationIdParam = z.infer<typeof reservationIdParamSchema>;

@@ -10,12 +10,12 @@ import {
 function mapTmdbError(error: unknown): never {
   if (error instanceof TmdbRequestError) {
     if (error.status === 404) {
-      throw new AppError("Filme nao encontrado no TMDB.", 404);
+      throw new AppError("Filme não encontrado no TMDB.", 404);
     }
     if (error.status === 429) {
-      throw new AppError("Limite de requisicoes ao TMDB atingido. Tente novamente em instantes.", 429);
+      throw new AppError("Limite de requisições ao TMDB atingido. Tente novamente em instantes.", 429);
     }
-    throw new AppError("Catalogo externo (TMDB) indisponivel no momento.", 502);
+    throw new AppError("Catálogo externo (TMDB) indisponível no momento.", 502);
   }
 
   throw error;
