@@ -5,6 +5,7 @@ import { prisma } from "../../shared/prisma/client.js";
 import { generateTicketCode } from "../../shared/security/secure-token.js";
 import { signTicketQr } from "../../shared/security/ticket-qr.js";
 import type { PaymentChargeResult } from "./payments.provider.js";
+import type { ReservationStatus, Ticket } from "../../../generated/prisma/client.js";
 
 type ProcessPaymentInput = {
   reservationId: string;
@@ -37,20 +38,20 @@ export const MAX_PAYMENT_ATTEMPTS = 3;
 // reserva ao mesmo tempo.
 export function processPayment(input: ProcessPaymentInput) {
   return prisma.$transaction(async (tx) => {
-    const claim = await tx.ticketReservation.updateMany({
+    // updateManyAndReturn (em vez de updateMany + um findUniqueOrThrow
+    // separado) faz o claim condicional e le o paymentAttempts resultante
+    // numa unica ida ao banco.
+    const [claimed] = await tx.ticketReservation.updateManyAndReturn({
       where: { id: input.reservationId, status: "PENDING_PAYMENT", paymentAttempts: { lt: MAX_PAYMENT_ATTEMPTS } },
       data: { paymentAttempts: { increment: 1 } },
+      select: { paymentAttempts: true },
     });
 
-    if (claim.count !== 1) {
+    if (!claimed) {
       throw new AppError("Pagamento já processado ou reserva não está aguardando pagamento.", 409);
     }
 
-    const reservation = await tx.ticketReservation.findUniqueOrThrow({
-      where: { id: input.reservationId },
-      select: { paymentAttempts: true },
-    });
-    const attempt = reservation.paymentAttempts;
+    const attempt = claimed.paymentAttempts;
     const isFinalAttempt = attempt >= MAX_PAYMENT_ATTEMPTS;
 
     const payment = await tx.simulatedPayment.create({
@@ -65,18 +66,23 @@ export function processPayment(input: ProcessPaymentInput) {
       },
     });
 
+    // Campos comuns aos 3 desfechos possiveis num unico lugar, pra um campo
+    // novo no resultado (como attempt/maxAttempts) nao precisar ser repetido
+    // em cada return.
+    const buildResult = (reservationStatus: ReservationStatus, tickets: Ticket[]) => ({
+      payment,
+      reservationStatus,
+      tickets,
+      attempt,
+      maxAttempts: MAX_PAYMENT_ATTEMPTS,
+    });
+
     if (input.chargeResult.status === "DECLINED") {
       // Nas tentativas 1 e 2, a reserva continua PENDING_PAYMENT e o
       // assento continua RESERVED de proposito -- so a tentativa final
       // libera o assento e fecha a reserva (ver comentario acima).
       if (!isFinalAttempt) {
-        return {
-          payment,
-          reservationStatus: "PENDING_PAYMENT" as const,
-          tickets: [],
-          attempt,
-          maxAttempts: MAX_PAYMENT_ATTEMPTS,
-        };
+        return buildResult("PENDING_PAYMENT", []);
       }
 
       await tx.ticketReservation.update({
@@ -88,13 +94,7 @@ export function processPayment(input: ProcessPaymentInput) {
         data: { status: "AVAILABLE" },
       });
 
-      return {
-        payment,
-        reservationStatus: "PAYMENT_DECLINED" as const,
-        tickets: [],
-        attempt,
-        maxAttempts: MAX_PAYMENT_ATTEMPTS,
-      };
+      return buildResult("PAYMENT_DECLINED", []);
     }
 
     await tx.ticketReservation.update({ where: { id: input.reservationId }, data: { status: "PAID" } });
@@ -106,7 +106,7 @@ export function processPayment(input: ProcessPaymentInput) {
     // Um ticket por assento (reserva aprovada gera "um ou mais ingressos").
     // O id e gerado antes do create pra poder assinar o QR (HMAC sobre o
     // ticket.id) na mesma escrita, sem precisar de um update posterior.
-    const tickets = [];
+    const tickets: Ticket[] = [];
     for (const eventSeatId of input.seatIds) {
       const ticketId = randomUUID();
       const ticket = await tx.ticket.create({
@@ -123,13 +123,7 @@ export function processPayment(input: ProcessPaymentInput) {
       tickets.push(ticket);
     }
 
-    return {
-      payment,
-      reservationStatus: "PAID" as const,
-      tickets,
-      attempt,
-      maxAttempts: MAX_PAYMENT_ATTEMPTS,
-    };
+    return buildResult("PAID", tickets);
   });
 }
 
