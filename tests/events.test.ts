@@ -3,6 +3,8 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../src/app.js";
+import * as paymentsRepository from "../src/modules/payments/payments.repository.js";
+import { AppError } from "../src/shared/errors/app-error.js";
 import { prisma } from "../src/shared/prisma/client.js";
 import { signAccessToken } from "../src/shared/security/token-service.js";
 
@@ -817,6 +819,51 @@ describe("events", () => {
       const remainingEvent = await prisma.event.findUnique({ where: { id: eventId } });
       expect(remainingEvent).toBeNull();
       expect(await prisma.ticketReservation.findUnique({ where: { id: reservation.id } })).toBeNull();
+    });
+
+    it("condicao de corrida: excluir o evento ao mesmo tempo que um pagamento aprova a reserva pendente nunca da 500", async () => {
+      const created = await createTestEvent();
+      const eventId = created.body.event.id;
+      const seat = await prisma.eventSeat.findFirstOrThrow({ where: { eventId } });
+      await prisma.eventSeat.update({ where: { id: seat.id }, data: { status: "RESERVED" } });
+
+      const reservation = await prisma.ticketReservation.create({
+        data: {
+          customerId: organizerId,
+          eventId,
+          status: "PENDING_PAYMENT",
+          quantity: 1,
+          totalAmount: 35.5,
+          items: { create: { eventSeatId: seat.id, unitPrice: 35.5 } },
+        },
+      });
+
+      // Chama processPayment direto (nao via HTTP) pra simular, de proposito,
+      // um pagamento aprovando exatamente na janela entre o recheck de
+      // reserva paga e o delete de fato -- o cenario do finding do code
+      // review. deleteEventWithSeats roda em Serializable, entao ou o
+      // Postgres aborta a transacao do delete com conflito de serializacao
+      // (convertido em AppError 409 pelo service) ou o recheck dentro da
+      // propria transacao ja pega a reserva paga (AppError 400) -- nunca um
+      // 500 cru.
+      const [deleteResult, paymentResult] = await Promise.allSettled([
+        request(app).delete(`/api/events/${eventId}`).set("Authorization", `Bearer ${organizerToken}`),
+        paymentsRepository.processPayment({
+          reservationId: reservation.id,
+          customerId: organizerId,
+          eventId,
+          seatIds: [seat.id],
+          amount: 35.5,
+          chargeResult: { status: "APPROVED", providerReference: "race-test", failureReason: null },
+        }),
+      ]);
+
+      if (deleteResult.status === "fulfilled") {
+        expect(deleteResult.value.status).not.toBe(500);
+      }
+      if (paymentResult.status === "rejected") {
+        expect(paymentResult.reason).toBeInstanceOf(AppError);
+      }
     });
   });
 });

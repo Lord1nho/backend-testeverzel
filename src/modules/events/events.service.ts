@@ -3,7 +3,8 @@ import * as catalogService from "../catalog/catalog.service.js";
 import * as eventsRepository from "./events.repository.js";
 import { computeSessionStatus, sortSeatsByCode, toEventDetail, toEventSeat, toEventSummary } from "./events.mappers.js";
 import type { CreateEventBody, UpdateEventBody } from "./events.schemas.js";
-import type { Prisma, Venue } from "../../../generated/prisma/client.js";
+import { Prisma } from "../../../generated/prisma/client.js";
+import type { Venue } from "../../../generated/prisma/client.js";
 
 const SEAT_ROW_SIZE = 10;
 
@@ -240,10 +241,23 @@ export async function deleteEvent(eventId: string, organizerId: string) {
     throw new AppError("Evento com data passada não pode ser excluído.", 400);
   }
 
+  // Checagem rapida (fora de transacao) so pra rejeitar cedo o caso comum.
+  // O recheck que realmente protege contra corrida mora dentro da propria
+  // transacao Serializable de deleteEventWithSeats.
   const hasPaidReservation = await eventsRepository.hasPaidReservation(eventId);
   if (hasPaidReservation) {
     throw new AppError("Evento com reservas pagas não pode ser excluído.", 400);
   }
 
-  await eventsRepository.deleteEventWithSeats(eventId);
+  try {
+    await eventsRepository.deleteEventWithSeats(eventId);
+  } catch (error) {
+    // P2034: conflito de serializacao (ex: um pagamento aprovou ou uma
+    // reserva nova entrou pro evento bem no meio desta exclusao) -- o
+    // Postgres abortou esta transacao de proposito, nao e um erro real.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      throw new AppError("Conflito ao excluir o evento, tente novamente.", 409);
+    }
+    throw error;
+  }
 }

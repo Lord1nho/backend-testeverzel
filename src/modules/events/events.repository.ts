@@ -1,3 +1,4 @@
+import { AppError } from "../../shared/errors/app-error.js";
 import { prisma } from "../../shared/prisma/client.js";
 import type { Prisma, Venue } from "../../../generated/prisma/client.js";
 
@@ -216,27 +217,33 @@ export async function hasPaidReservation(eventId: string) {
   return count > 0;
 }
 
+// Serializable (nao o default Read Committed): o organizador que exclui o
+// evento e um pagamento que aprova (ou uma reserva nova que entra) pro
+// mesmo evento, ao mesmo tempo, sao duas transacoes concorrentes
+// completamente separadas -- Read Committed deixaria as duas seguirem em
+// frente e so estourar depois numa violacao de FK crua (500). Com
+// Serializable, o Postgres detecta esse conflito entre as duas transacoes
+// e aborta uma delas com erro de serializacao (Prisma P2034), que o
+// service converte num 409 limpo. O recheck de reserva PAID tambem entra
+// aqui dentro (nao so no service) pra fechar essa mesma janela.
 export function deleteEventWithSeats(eventId: string) {
-  return prisma.$transaction(async (tx) => {
-    // ON DELETE RESTRICT em varias FKs -> events.id/event_seats.id: o
-    // service ja garante que nao ha reserva PAID (logo nao ha Ticket), mas
-    // reservas CANCELLED/EXPIRED/PAYMENT_DECLINED (e seus ReservationItem,
-    // SimulatedPayment) e tentativas de validacao na portaria
-    // (GateValidation) continuam referenciando o evento -- precisam ser
-    // apagadas primeiro, na mesma transacao, senao o delete falha com
-    // violacao de FK.
-    const seatIds = (await tx.eventSeat.findMany({ where: { eventId }, select: { id: true } })).map(
-      (seat) => seat.id,
-    );
-    const reservationIds = (
-      await tx.ticketReservation.findMany({ where: { eventId }, select: { id: true } })
-    ).map((reservation) => reservation.id);
+  return prisma.$transaction(
+    async (tx) => {
+      const paidReservations = await tx.ticketReservation.count({ where: { eventId, status: "PAID" } });
+      if (paidReservations > 0) {
+        throw new AppError("Evento com reservas pagas não pode ser excluído.", 400);
+      }
 
-    await tx.gateValidation.deleteMany({ where: { checkedEventId: eventId } });
-    await tx.simulatedPayment.deleteMany({ where: { reservationId: { in: reservationIds } } });
-    await tx.reservationItem.deleteMany({ where: { eventSeatId: { in: seatIds } } });
-    await tx.ticketReservation.deleteMany({ where: { eventId } });
-    await tx.eventSeat.deleteMany({ where: { eventId } });
-    await tx.event.delete({ where: { id: eventId } });
-  });
+      // Filtra pela relacao direto no banco, sem precisar de um findMany +
+      // snapshot de IDs em JS antes (o snapshot ficaria desatualizado se uma
+      // reserva nova entrasse pro evento no meio da transacao).
+      await tx.gateValidation.deleteMany({ where: { checkedEventId: eventId } });
+      await tx.simulatedPayment.deleteMany({ where: { reservation: { eventId } } });
+      await tx.reservationItem.deleteMany({ where: { eventSeat: { eventId } } });
+      await tx.ticketReservation.deleteMany({ where: { eventId } });
+      await tx.eventSeat.deleteMany({ where: { eventId } });
+      await tx.event.delete({ where: { id: eventId } });
+    },
+    { isolationLevel: "Serializable" },
+  );
 }

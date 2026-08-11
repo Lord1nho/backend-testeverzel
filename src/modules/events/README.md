@@ -101,7 +101,7 @@ Checado em: `POST /events/:id/publish` (sempre) e `PATCH /events/:id` (só se o 
 
 ## `DELETE /api/events/:id`
 
-Exclusão definitiva (hard delete). Bloqueada se `startsAt` já passou, ou se existe alguma `TicketReservation` com `status: "PAID"` vinculada ao evento (400). Se permitida, apaga os assentos e o evento numa transação (a FK de `event_seats` é `ON DELETE RESTRICT`, então os assentos precisam ser removidos primeiro).
+Exclusão definitiva (hard delete). Bloqueada se `startsAt` já passou, ou se existe alguma `TicketReservation` com `status: "PAID"` vinculada ao evento (400, checado duas vezes — antes de abrir a transação e de novo dentro dela). Se permitida, apaga em cascata, na mesma transação `Serializable`, tudo que referencia o evento antes do evento em si: `GateValidation`, `SimulatedPayment`, `ReservationItem`, `TicketReservation`, `EventSeat` e por fim `Event` (todas essas FKs são `ON DELETE RESTRICT`). Isolamento `Serializable` (não o padrão `Read Committed`) é o que impede um pagamento aprovando ou uma reserva nova entrando pro evento bem no meio da exclusão — o Postgres detecta o conflito e aborta a transação (**409**) em vez de deixar a corrida terminar numa violação de FK crua (500).
 
 **204 No Content** (sem corpo).
 
@@ -153,7 +153,7 @@ Se a TMDB não informar duração pro filme (`durationMinutes` fica `null`/`0` e
 `route -> controller -> service -> repository -> Prisma`:
 
 - `events.schemas.ts` — validação Zod (`venue` via `z.nativeEnum(Venue)`, `room` 1-4). Regras que dependem do estado atual do evento no banco ("capacidade só em DRAFT", "campos travados com reserva paga") não dá pra expressar aqui, ficam no service.
-- `events.repository.ts` — único lugar que importa `prisma`. Concentra as transações: criação (upsert do `ExternalCatalogItem`, incluindo `durationMinutes`, + create do `Event` + `createMany` dos `EventSeat`), regeneração de assentos ao mudar capacidade, e exclusão (apaga `EventSeat`s antes do `Event`, por causa do `ON DELETE RESTRICT`). `findPublishedEventsInVenueRoom` busca os candidatos a conflito de horário (índice `@@index([venue, room, status])` em `Event` pra essa query).
+- `events.repository.ts` — único lugar que importa `prisma`. Concentra as transações: criação (upsert do `ExternalCatalogItem`, incluindo `durationMinutes`, + create do `Event` + `createMany` dos `EventSeat`), regeneração de assentos ao mudar capacidade, e exclusão (`Serializable`, apaga tudo que referencia o evento antes do `Event`, por causa do `ON DELETE RESTRICT`). `findPublishedEventsInVenueRoom` busca os candidatos a conflito de horário (índice `@@index([venue, room, status])` em `Event` pra essa query).
 - `events.service.ts` — os 7 casos de uso, `generateSeatCodes(capacity)` (linhas de 10), `findOwnedEventOrThrow` (checagem de dono, reusada por get/update/publish/delete/seats), e `assertNoScheduleConflict` (checagem de conflito de horário, chamada por `publishEvent` sempre e por `updateEvent` quando o evento já é `PUBLISHED`).
 - `events.mappers.ts` — `toEventSummary`/`toEventDetail`/`toEventSeat` + `sortSeatsByCode` (ordena `A10` depois de `A9`, não como string) + `computeSessionStatus`.
 - `events.controller.ts` — 7 handlers finos (Organizador).
