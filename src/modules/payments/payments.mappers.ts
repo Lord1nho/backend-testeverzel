@@ -4,8 +4,14 @@ type ProcessPaymentResult = {
   payment: SimulatedPayment;
   reservationStatus: ReservationStatus;
   tickets: Ticket[];
+  attempt: number;
+  maxAttempts: number;
 };
 
+// attempt/maxAttempts dao ao frontend o que precisa pra decidir a tela:
+// reservationStatus "PENDING_PAYMENT" apos uma recusa = ainda ha tentativa
+// sobrando, continua no checkout; "PAYMENT_DECLINED" = tentativas
+// esgotadas (ou 3a recusa), reserva fechada, precisa reservar de novo.
 export function toPaymentResult(result: ProcessPaymentResult) {
   return {
     payment: {
@@ -17,5 +23,7 @@ export function toPaymentResult(result: ProcessPaymentResult) {
     },
     reservationStatus: result.reservationStatus,
     tickets: result.tickets.map((ticket) => ({ id: ticket.id, code: ticket.code, status: ticket.status })),
+    attempt: result.attempt,
+    maxAttempts: result.maxAttempts,
   };
 }
