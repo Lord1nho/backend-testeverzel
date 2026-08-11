@@ -1,3 +1,4 @@
+import { toEventBasicSummary } from "../../shared/mappers/event-basic-summary.js";
 import type { Event, EventSeat, Ticket, ValidationResult } from "../../../generated/prisma/client.js";
 
 type TicketRow = Ticket & { event: Event; eventSeat: EventSeat };
@@ -6,13 +7,7 @@ type TicketRow = Ticket & { event: Event; eventSeat: EventSeat };
 // suficiente pra portaria auto-selecionar o evento certo na tela, nunca
 // dados do dono do ticket.
 export function toTicketEventSummary(ticket: Pick<TicketRow, "event">) {
-  return {
-    id: ticket.event.id,
-    title: ticket.event.title,
-    startsAt: ticket.event.startsAt,
-    venue: ticket.event.venue,
-    room: ticket.event.room,
-  };
+  return toEventBasicSummary(ticket.event);
 }
 
 // VALID expõe o detalhe util pra portaria (evento + assento). WRONG_EVENT
