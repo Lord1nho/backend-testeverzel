@@ -53,7 +53,7 @@ export function markUsedAndLog(input: MarkUsedInput) {
           checkedEventId: input.checkedEventId,
           inputMethod: input.inputMethod,
           result: "ALREADY_USED",
-          reason: "Ingresso ja utilizado (corrida concorrente).",
+          reason: "Ingresso já utilizado (corrida concorrente).",
         },
       });
       return { usedNow: false as const };
