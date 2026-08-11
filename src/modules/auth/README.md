@@ -46,6 +46,15 @@ Alternativamente, rotas protegidas tambem aceitam `Authorization: Bearer <token>
 
 Nota de seguranca: as duas causas de 401 (e-mail inexistente vs senha errada) retornam a **mesma** mensagem generica, para nao permitir enumerar e-mails cadastrados.
 
+### Por que o erro de formato de e-mail (400) as vezes aparece, as vezes nao
+
+`email` é validado no schema (`auth.schemas.ts`) com `z.string().email()`, mais estrito que a validação nativa do navegador (`<input type="email">`). Isso é **comportamento esperado**, não uma inconsistência a corrigir:
+
+- Na maioria dos casos, o próprio navegador já bloqueia o envio de um e-mail com formato claramente inválido antes da requisição sair — o usuário nunca chega a ver o 400 do backend.
+- O 400 (`"Erro de validacao."`) só aparece pros casos raros que passam pela validação nativa do navegador (mais permissiva) mas não passam pela regex do Zod no backend — ex: alguns navegadores aceitam formatos que o `z.string().email()` rejeita.
+- Esse 400 é semanticamente diferente do 401 (`"Credenciais invalidas."`): o 400 significa que a requisição nem chegou a comparar credenciais (formato inválido antes de tocar no banco); o 401 significa que o formato era válido mas o e-mail não existe ou a senha está errada. **Não devem ser unificados** — são dois erros de causas diferentes, e misturá-los esconderia informação útil pra depuração (ex: um typo grosseiro no domínio do e-mail vs uma senha esquecida).
+- Cabe ao frontend decidir se quer tratar esse 400 como um caso à parte (ex: "formato de e-mail inválido") ou deixar cair no tratamento genérico de erro — o backend já valida o formato antes de tentar autenticar, então o frontend não precisa duplicar essa checagem pra funcionar corretamente.
+
 ## `POST /api/auth/logout`
 
 Limpa o cookie `access_token`.
