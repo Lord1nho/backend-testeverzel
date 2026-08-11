@@ -90,7 +90,9 @@ export async function createEvent(organizerId: string, body: CreateEventBody) {
     },
     {
       organizerId,
-      title: body.title?.trim() || movie.title,
+      // Nome do evento travado no titulo do TMDB -- o organizador nao pode
+      // sobrescrever (nem aqui, nem depois via updateEvent).
+      title: movie.title,
       startsAt: new Date(body.startsAt),
       venue: body.venue,
       room: body.room,
@@ -157,7 +159,6 @@ export async function updateEvent(eventId: string, organizerId: string, body: Up
   }
 
   const fields: Prisma.EventUpdateInput = {};
-  if (body.title !== undefined) fields.title = body.title;
   if (body.startsAt !== undefined) fields.startsAt = new Date(body.startsAt);
   if (body.venue !== undefined) fields.venue = body.venue;
   if (body.room !== undefined) fields.room = body.room;
@@ -201,6 +202,34 @@ export async function publishEvent(eventId: string, organizerId: string) {
 
   const updated = await eventsRepository.publishEvent(eventId);
   return toEventDetail(updated);
+}
+
+// UC7 - Consultar Eventos Publicados: so eventos PUBLISHED, de qualquer
+// organizador. UC8 (busca/filtro) fica fora desta rodada por decisao de
+// escopo.
+export async function listPublishedEvents() {
+  const events = await eventsRepository.findManyPublished();
+  return events.map(toEventSummary);
+}
+
+// UC9 - Visualizar Detalhes do Evento.
+export async function getPublishedEventById(eventId: string) {
+  const event = await eventsRepository.findPublishedById(eventId);
+  if (!event) {
+    throw new AppError("Evento nao encontrado.", 404);
+  }
+  return toEventDetail(event);
+}
+
+// Mapa de assentos do evento publicado -- suporte visual a UC9/UC11 (o
+// Cliente ve quais assentos estao disponiveis antes de reservar).
+export async function getPublishedEventSeats(eventId: string) {
+  const event = await eventsRepository.findPublishedRawById(eventId);
+  if (!event) {
+    throw new AppError("Evento nao encontrado.", 404);
+  }
+  const seats = await eventsRepository.findSeatsByEventId(eventId);
+  return sortSeatsByCode(seats).map(toEventSeat);
 }
 
 export async function deleteEvent(eventId: string, organizerId: string) {

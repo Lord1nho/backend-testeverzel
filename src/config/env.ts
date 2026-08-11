@@ -5,6 +5,7 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(1),
+  TICKET_QR_SECRET: z.string().min(1),
   TMDB_BASE_URL: z.string().url().default("https://api.themoviedb.org/3"),
   TMDB_ACCESS_TOKEN: z.string().optional(),
   TMDB_LANGUAGE: z.string().default("pt-BR"),

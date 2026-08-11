@@ -156,6 +156,7 @@ model EventSeat {
 
   event            Event             @relation(fields: [eventId], references: [id])
   reservationItems ReservationItem[]
+  tickets          Ticket[]
 
   @@unique([eventId, code])
   @@map("event_seats")
@@ -215,6 +216,7 @@ model Ticket {
   reservationId String       @map("reservation_id") @db.Uuid
   customerId    String       @map("customer_id") @db.Uuid
   eventId       String       @map("event_id") @db.Uuid
+  eventSeatId   String       @map("event_seat_id") @db.Uuid
   code          String       @unique
   qrTokenHash   String       @map("qr_token_hash")
   status        TicketStatus @default(VALID)
@@ -225,6 +227,7 @@ model Ticket {
   reservation     TicketReservation @relation(fields: [reservationId], references: [id])
   customer        User              @relation("CustomerTickets", fields: [customerId], references: [id])
   event           Event             @relation(fields: [eventId], references: [id])
+  eventSeat       EventSeat         @relation(fields: [eventSeatId], references: [id])
   shareLinks      TicketShareLink[]
   gateValidations GateValidation[]
 

@@ -203,14 +203,14 @@ describe("events", () => {
       expect(first.body.event.catalogItem.id).toBe(second.body.event.catalogItem.id);
     });
 
-    it("usa o titulo do filme como default quando title nao e informado", async () => {
+    it("usa sempre o titulo do filme (TMDB)", async () => {
       const response = await createTestEvent();
       expect(response.body.event.title).toBe("Clube da Luta");
     });
 
-    it("usa o title informado quando presente", async () => {
+    it("ignora title enviado no body -- nome do evento fica travado no do TMDB", async () => {
       const response = await createTestEvent({ title: "Sessao Especial" });
-      expect(response.body.event.title).toBe("Sessao Especial");
+      expect(response.body.event.title).toBe("Clube da Luta");
     });
 
     it("retorna 400 para capacity invalida", async () => {
@@ -391,7 +391,7 @@ describe("events", () => {
   });
 
   describe("PATCH /api/events/:id (reserva paga trava startsAt/venue/room)", () => {
-    it("bloqueia startsAt/venue/room mas permite title/price com reserva PAID vinculada", async () => {
+    it("bloqueia startsAt/venue/room mas permite price com reserva PAID vinculada", async () => {
       const created = await createTestEvent();
       const eventId = created.body.event.id;
 
@@ -423,12 +423,6 @@ describe("events", () => {
         .send({ room: 4 });
       expect(roomResponse.status).toBe(400);
 
-      const titleResponse = await request(app)
-        .patch(`/api/events/${eventId}`)
-        .set("Authorization", `Bearer ${organizerToken}`)
-        .send({ title: "Novo titulo" });
-      expect(titleResponse.status).toBe(200);
-
       const priceResponse = await request(app)
         .patch(`/api/events/${eventId}`)
         .set("Authorization", `Bearer ${organizerToken}`)
@@ -436,6 +430,34 @@ describe("events", () => {
       expect(priceResponse.status).toBe(200);
 
       await prisma.ticketReservation.deleteMany({ where: { eventId } });
+    });
+  });
+
+  describe("PATCH /api/events/:id (title travado)", () => {
+    it("ignora title no PATCH -- nome do evento permanece o do TMDB", async () => {
+      const created = await createTestEvent();
+      const eventId = created.body.event.id;
+
+      const response = await request(app)
+        .patch(`/api/events/${eventId}`)
+        .set("Authorization", `Bearer ${organizerToken}`)
+        .send({ title: "Novo titulo", price: 50 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.event.title).toBe("Clube da Luta");
+      expect(response.body.event.price).toBe(50);
+    });
+
+    it("retorna 400 quando title e o unico campo enviado (nada de fato pra atualizar)", async () => {
+      const created = await createTestEvent();
+      const eventId = created.body.event.id;
+
+      const response = await request(app)
+        .patch(`/api/events/${eventId}`)
+        .set("Authorization", `Bearer ${organizerToken}`)
+        .send({ title: "Novo titulo" });
+
+      expect(response.status).toBe(400);
     });
   });
 
@@ -643,7 +665,7 @@ describe("events", () => {
       const patchResponse = await request(app)
         .patch(`/api/events/${first.body.event.id}`)
         .set("Authorization", `Bearer ${organizerToken}`)
-        .send({ title: "Novo titulo" });
+        .send({ price: 50 });
 
       expect(patchResponse.status).toBe(200);
     });
