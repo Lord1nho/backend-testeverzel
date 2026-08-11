@@ -218,9 +218,24 @@ export async function hasPaidReservation(eventId: string) {
 
 export function deleteEventWithSeats(eventId: string) {
   return prisma.$transaction(async (tx) => {
-    // ON DELETE RESTRICT em event_seats.event_id -> events.id: precisa
-    // apagar os seats primeiro, na mesma transacao, senao o delete do
-    // Event falha com violacao de FK.
+    // ON DELETE RESTRICT em varias FKs -> events.id/event_seats.id: o
+    // service ja garante que nao ha reserva PAID (logo nao ha Ticket), mas
+    // reservas CANCELLED/EXPIRED/PAYMENT_DECLINED (e seus ReservationItem,
+    // SimulatedPayment) e tentativas de validacao na portaria
+    // (GateValidation) continuam referenciando o evento -- precisam ser
+    // apagadas primeiro, na mesma transacao, senao o delete falha com
+    // violacao de FK.
+    const seatIds = (await tx.eventSeat.findMany({ where: { eventId }, select: { id: true } })).map(
+      (seat) => seat.id,
+    );
+    const reservationIds = (
+      await tx.ticketReservation.findMany({ where: { eventId }, select: { id: true } })
+    ).map((reservation) => reservation.id);
+
+    await tx.gateValidation.deleteMany({ where: { checkedEventId: eventId } });
+    await tx.simulatedPayment.deleteMany({ where: { reservationId: { in: reservationIds } } });
+    await tx.reservationItem.deleteMany({ where: { eventSeatId: { in: seatIds } } });
+    await tx.ticketReservation.deleteMany({ where: { eventId } });
     await tx.eventSeat.deleteMany({ where: { eventId } });
     await tx.event.delete({ where: { id: eventId } });
   });

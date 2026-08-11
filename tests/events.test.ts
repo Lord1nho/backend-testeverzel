@@ -390,8 +390,8 @@ describe("events", () => {
     });
   });
 
-  describe("PATCH /api/events/:id (reserva paga trava startsAt/venue/room)", () => {
-    it("bloqueia startsAt/venue/room mas permite price com reserva PAID vinculada", async () => {
+  describe("PATCH /api/events/:id (reserva paga trava startsAt/venue/room/price)", () => {
+    it("bloqueia startsAt/venue/room/price com reserva PAID vinculada", async () => {
       const created = await createTestEvent();
       const eventId = created.body.event.id;
 
@@ -427,7 +427,7 @@ describe("events", () => {
         .patch(`/api/events/${eventId}`)
         .set("Authorization", `Bearer ${organizerToken}`)
         .send({ price: 99.9 });
-      expect(priceResponse.status).toBe(200);
+      expect(priceResponse.status).toBe(400);
 
       await prisma.ticketReservation.deleteMany({ where: { eventId } });
     });
@@ -771,6 +771,52 @@ describe("events", () => {
       expect(stillExists).not.toBeNull();
 
       await prisma.ticketReservation.deleteMany({ where: { eventId } });
+    });
+
+    it("exclui evento sem vendas mesmo com reserva CANCELLED, pagamento recusado e validacao de portaria vinculados", async () => {
+      const created = await createTestEvent();
+      const eventId = created.body.event.id;
+      const seat = await prisma.eventSeat.findFirstOrThrow({ where: { eventId } });
+
+      const reservation = await prisma.ticketReservation.create({
+        data: {
+          customerId: organizerId,
+          eventId,
+          status: "CANCELLED",
+          quantity: 1,
+          totalAmount: 35.5,
+          items: { create: { eventSeatId: seat.id, unitPrice: 35.5 } },
+        },
+      });
+      await prisma.simulatedPayment.create({
+        data: {
+          reservationId: reservation.id,
+          provider: "SIMULATED",
+          status: "DECLINED",
+          amount: 35.5,
+          failureReason: "teste",
+        },
+      });
+      await prisma.gateValidation.create({
+        data: {
+          ticketId: null,
+          gateUserId: organizerId,
+          checkedEventId: eventId,
+          inputMethod: "MANUAL_CODE",
+          result: "INVALID",
+          reason: "teste",
+        },
+      });
+
+      const response = await request(app)
+        .delete(`/api/events/${eventId}`)
+        .set("Authorization", `Bearer ${organizerToken}`);
+
+      expect(response.status).toBe(204);
+
+      const remainingEvent = await prisma.event.findUnique({ where: { id: eventId } });
+      expect(remainingEvent).toBeNull();
+      expect(await prisma.ticketReservation.findUnique({ where: { id: reservation.id } })).toBeNull();
     });
   });
 });

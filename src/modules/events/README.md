@@ -82,7 +82,7 @@ Edita campos do evento: `startsAt`, `venue`, `room`, `capacity`, `price`. Todos 
 **Regras:**
 - Evento com `startsAt` já passado não pode ser editado (400).
 - `capacity` só pode mudar enquanto o evento estiver `DRAFT` (400 se já `PUBLISHED`) — mudar `capacity` apaga e regera todos os assentos (seguro, pois `DRAFT` nunca teve venda).
-- `startsAt`, `venue` e `room` ficam travados (400) se existir alguma `TicketReservation` com `status: "PAID"` vinculada ao evento — são os campos que representam o "contrato" com quem já pagou (quando e onde a sessão acontece). `price` continua livre mesmo com reserva paga: é seguro porque `TicketReservation.totalAmount` já congela o valor pago no momento da compra (campo próprio no schema, não recalculado a partir de `Event.price`).
+- `startsAt`, `venue`, `room` e `price` ficam travados (400) se existir alguma `TicketReservation` com `status: "PAID"` vinculada ao evento — nenhum desses campos pode mudar depois que alguém já pagou por aquela sessão (quando, onde e por quanto).
 - Se o evento **já está `PUBLISHED`** e o PATCH muda `startsAt`/`venue`/`room` (e não há reserva paga bloqueando primeiro), verifica **conflito de horário** contra outros eventos `PUBLISHED` na mesma `venue`+`room` (409 se colidir — ver seção abaixo). Evento ainda `DRAFT` nunca é checado aqui — rascunho é livre.
 
 **200 OK:** mesmo formato de `GET /events/:id`.
