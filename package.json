@@ -2,11 +2,11 @@
   "name": "backend-testeverzel",
   "version": "1.0.0",
   "description": "Backend da Plataforma de Eventos e Ingressos do teste tecnico Verzel.",
-  "main": "dist/server.js",
+  "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "npm run prisma:generate && tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
