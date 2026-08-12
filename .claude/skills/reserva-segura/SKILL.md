@@ -28,7 +28,7 @@ Garantir que alteracoes no fluxo de reserva nao quebrem:
 - Sempre buscar o assento no banco dentro da transacao.
 - Se o assento nao estiver disponivel, falhar com erro claro.
 - Se pagamento for aprovado, criar ticket e marcar assento como vendido.
-- Se pagamento for recusado, nao criar ticket e liberar assento.
+- Se pagamento for recusado, nao criar ticket e liberar assento -- **excecao deliberada**: a reserva aceita ate 3 tentativas de pagamento (`payments.repository.ts`, `MAX_PAYMENT_ATTEMPTS`); nas tentativas 1 e 2 o assento continua reservado (o cliente tenta de novo na mesma reserva), so a 3a recusa libera o assento de fato.
 - Nunca validar ticket apenas pelo frontend.
 
 ## Testes Esperados
@@ -37,6 +37,6 @@ Ao terminar qualquer mudanca, testar:
 
 - cliente compra assento disponivel;
 - outro cliente nao compra o mesmo assento;
-- pagamento recusado libera assento;
+- pagamento recusado na tentativa final (3a) libera assento; tentativas 1 e 2 mantem o assento reservado;
 - ticket aprovado aparece em meus ingressos;
 - ticket usado nao pode ser usado novamente.

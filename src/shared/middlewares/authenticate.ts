@@ -24,14 +24,14 @@ export const authenticate: RequestHandler = (request, _response, next) => {
   const token = extractToken(request);
 
   if (!token) {
-    throw new AppError("Token de autenticacao ausente.", 401);
+    throw new AppError("Token de autenticação ausente.", 401);
   }
 
   let payload;
   try {
     payload = verifyAccessToken(token);
   } catch {
-    throw new AppError("Token invalido ou expirado.", 401);
+    throw new AppError("Token inválido ou expirado.", 401);
   }
 
   request.user = {

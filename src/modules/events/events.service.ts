@@ -3,7 +3,8 @@ import * as catalogService from "../catalog/catalog.service.js";
 import * as eventsRepository from "./events.repository.js";
 import { computeSessionStatus, sortSeatsByCode, toEventDetail, toEventSeat, toEventSummary } from "./events.mappers.js";
 import type { CreateEventBody, UpdateEventBody } from "./events.schemas.js";
-import type { Prisma, Venue } from "../../../generated/prisma/client.js";
+import { Prisma } from "../../../generated/prisma/client.js";
+import type { Venue } from "../../../generated/prisma/client.js";
 
 const SEAT_ROW_SIZE = 10;
 
@@ -25,7 +26,7 @@ function generateSeatCodes(capacity: number): string[] {
 async function findOwnedEventOrThrow(eventId: string, organizerId: string) {
   const event = await eventsRepository.findRawByIdAndOrganizer(eventId, organizerId);
   if (!event) {
-    throw new AppError("Evento nao encontrado.", 404);
+    throw new AppError("Evento não encontrado.", 404);
   }
   return event;
 }
@@ -62,8 +63,8 @@ async function assertNoScheduleConflict(input: {
     const overlaps = newStart.getTime() < otherEnd.getTime() && otherStart.getTime() < newEnd.getTime();
     if (overlaps) {
       throw new AppError(
-        `Conflito de horario: a sala ${input.room} (${input.venue}) ja tem a sessao "${candidate.title}" ` +
-          `agendada nesse periodo (${otherStart.toISOString()} a ${otherEnd.toISOString()}).`,
+        `Conflito de horário: a sala ${input.room} (${input.venue}) já tem a sessão "${candidate.title}" ` +
+          `agendada nesse período (${otherStart.toISOString()} a ${otherEnd.toISOString()}).`,
         409,
       );
     }
@@ -126,18 +127,19 @@ export async function updateEvent(eventId: string, organizerId: string, body: Up
   const event = await findOwnedEventOrThrow(eventId, organizerId);
 
   if (event.startsAt.getTime() < Date.now()) {
-    throw new AppError("Evento com data passada nao pode ser editado.", 400);
+    throw new AppError("Evento com data passada não pode ser editado.", 400);
   }
 
   if (body.capacity !== undefined && event.status !== "DRAFT") {
-    throw new AppError("Capacidade so pode ser alterada enquanto o evento estiver em rascunho.", 400);
+    throw new AppError("Capacidade só pode ser alterada enquanto o evento estiver em rascunho.", 400);
   }
 
-  const changesLockedFields = body.startsAt !== undefined || body.venue !== undefined || body.room !== undefined;
+  const changesLockedFields =
+    body.startsAt !== undefined || body.venue !== undefined || body.room !== undefined || body.price !== undefined;
   if (changesLockedFields) {
     const hasPaidReservation = await eventsRepository.hasPaidReservation(eventId);
     if (hasPaidReservation) {
-      throw new AppError("Evento com reservas pagas nao pode ter data, venue ou sala alterados.", 400);
+      throw new AppError("Evento com reservas pagas não pode ter data, cinema, sala ou preço alterados.", 400);
     }
 
     // So checa conflito se o evento ja esta PUBLISHED -- DRAFT e livre por
@@ -183,13 +185,13 @@ export async function publishEvent(eventId: string, organizerId: string) {
   const event = await findOwnedEventOrThrow(eventId, organizerId);
 
   if (event.status === "PUBLISHED") {
-    throw new AppError("Evento ja publicado.", 400);
+    throw new AppError("Evento já publicado.", 400);
   }
   if (event.status === "CANCELLED") {
-    throw new AppError("Evento cancelado nao pode ser publicado.", 400);
+    throw new AppError("Evento cancelado não pode ser publicado.", 400);
   }
   if (event.startsAt.getTime() < Date.now()) {
-    throw new AppError("Evento com data passada nao pode ser publicado.", 400);
+    throw new AppError("Evento com data passada não pode ser publicado.", 400);
   }
 
   await assertNoScheduleConflict({
@@ -216,7 +218,7 @@ export async function listPublishedEvents() {
 export async function getPublishedEventById(eventId: string) {
   const event = await eventsRepository.findPublishedById(eventId);
   if (!event) {
-    throw new AppError("Evento nao encontrado.", 404);
+    throw new AppError("Evento não encontrado.", 404);
   }
   return toEventDetail(event);
 }
@@ -226,7 +228,7 @@ export async function getPublishedEventById(eventId: string) {
 export async function getPublishedEventSeats(eventId: string) {
   const event = await eventsRepository.findPublishedRawById(eventId);
   if (!event) {
-    throw new AppError("Evento nao encontrado.", 404);
+    throw new AppError("Evento não encontrado.", 404);
   }
   const seats = await eventsRepository.findSeatsByEventId(eventId);
   return sortSeatsByCode(seats).map(toEventSeat);
@@ -236,13 +238,26 @@ export async function deleteEvent(eventId: string, organizerId: string) {
   const event = await findOwnedEventOrThrow(eventId, organizerId);
 
   if (event.startsAt.getTime() < Date.now()) {
-    throw new AppError("Evento com data passada nao pode ser excluido.", 400);
+    throw new AppError("Evento com data passada não pode ser excluído.", 400);
   }
 
+  // Checagem rapida (fora de transacao) so pra rejeitar cedo o caso comum.
+  // O recheck que realmente protege contra corrida mora dentro da propria
+  // transacao Serializable de deleteEventWithSeats.
   const hasPaidReservation = await eventsRepository.hasPaidReservation(eventId);
   if (hasPaidReservation) {
-    throw new AppError("Evento com reservas pagas nao pode ser excluido.", 400);
+    throw new AppError("Evento com reservas pagas não pode ser excluído.", 400);
   }
 
-  await eventsRepository.deleteEventWithSeats(eventId);
+  try {
+    await eventsRepository.deleteEventWithSeats(eventId);
+  } catch (error) {
+    // P2034: conflito de serializacao (ex: um pagamento aprovou ou uma
+    // reserva nova entrou pro evento bem no meio desta exclusao) -- o
+    // Postgres abortou esta transacao de proposito, nao e um erro real.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+      throw new AppError("Conflito ao excluir o evento, tente novamente.", 409);
+    }
+    throw error;
+  }
 }

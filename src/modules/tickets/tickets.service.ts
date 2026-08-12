@@ -13,7 +13,7 @@ export async function listMyTickets(customerId: string) {
 export async function getTicketById(customerId: string, ticketId: string) {
   const ticket = await ticketsRepository.findByIdAndCustomer(ticketId, customerId);
   if (!ticket) {
-    throw new AppError("Ingresso nao encontrado.", 404);
+    throw new AppError("Ingresso não encontrado.", 404);
   }
   return toTicketDetail(ticket);
 }
@@ -23,7 +23,7 @@ export async function getTicketById(customerId: string, ticketId: string) {
 export async function createShareLink(customerId: string, ticketId: string) {
   const ticket = await ticketsRepository.findByIdAndCustomer(ticketId, customerId);
   if (!ticket) {
-    throw new AppError("Ingresso nao encontrado.", 404);
+    throw new AppError("Ingresso não encontrado.", 404);
   }
 
   const rawToken = generateSecureToken();
@@ -36,7 +36,7 @@ export async function createShareLink(customerId: string, ticketId: string) {
 export async function getSharedTicket(rawToken: string) {
   const ticket = await ticketsRepository.findByShareTokenHash(hashToken(rawToken));
   if (!ticket) {
-    throw new AppError("Link de compartilhamento invalido ou expirado.", 404);
+    throw new AppError("Link de compartilhamento inválido ou expirado.", 404);
   }
   return toSharedTicketView(ticket);
 }

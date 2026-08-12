@@ -334,4 +334,45 @@ describe("gate (UC16-20 - Validacao de Ingresso na Portaria)", () => {
       expect(response.status).toBe(400);
     });
   });
+
+  describe("GET /api/gate/tickets/:code/event", () => {
+    it("resolve o evento certo a partir do codigo, sem marcar nada (fluxo ideal)", async () => {
+      const event = await createPublishedEvent();
+      const ticket = await createPaidTicketWithQr(event.id);
+      const { code } = splitQrValue(ticket.qrValue);
+
+      const response = await request(app)
+        .get(`/api/gate/tickets/${code}/event`)
+        .set("Authorization", `Bearer ${gateToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.event).toMatchObject({ id: event.id, title: event.title });
+
+      const dbTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(dbTicket.status).toBe("VALID");
+      expect(await prisma.gateValidation.count({ where: { ticketId: ticket.id } })).toBe(0);
+    });
+
+    it("retorna 404 pra codigo inexistente", async () => {
+      const response = await request(app)
+        .get("/api/gate/tickets/NAOEXISTE/event")
+        .set("Authorization", `Bearer ${gateToken}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it("retorna 401 sem token e 403 para quem nao e GATE", async () => {
+      const event = await createPublishedEvent();
+      const ticket = await createPaidTicketWithQr(event.id);
+      const { code } = splitQrValue(ticket.qrValue);
+
+      const noAuthResponse = await request(app).get(`/api/gate/tickets/${code}/event`);
+      expect(noAuthResponse.status).toBe(401);
+
+      const customerResponse = await request(app)
+        .get(`/api/gate/tickets/${code}/event`)
+        .set("Authorization", `Bearer ${customerAsGateToken()}`);
+      expect(customerResponse.status).toBe(403);
+    });
+  });
 });

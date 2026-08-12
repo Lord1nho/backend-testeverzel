@@ -47,7 +47,7 @@ Validar como `VALID` já marca o ingresso como `USED` no mesmo request — não 
 
 Todo caminho grava uma linha em `GateValidation` (`ticketId` — `null` se o código nem foi encontrado —, `gateUserId`, `checkedEventId: body.eventId`, `inputMethod`: `QR_CAMERA` se veio `token`, senão `MANUAL_CODE`, `result`, `reason`), na mesma transação quando o caminho é `VALID`/corrida. É o histórico de auditoria da portaria.
 
-## Erros comuns
+## Erros comuns (`POST /validate`)
 
 | Status | Quando |
 | --- | --- |
@@ -55,16 +55,30 @@ Todo caminho grava uma linha em `GateValidation` (`ticketId` — `null` se o có
 | 401 | sem autenticação |
 | 403 | autenticado mas não é `GATE` |
 
+## `GET /api/gate/tickets/:code/event` — descobrir o evento automaticamente
+
+`eventId` continua **obrigatório** em `POST /validate` (é o que sustenta o resultado `WRONG_EVENT`) — mas isso normalmente implica a portaria escolher manualmente o evento numa tela antes de começar a validar. Este endpoint resolve isso sem mudar aquele contrato: dado só o `code` (a leitura inicial de um turno, sem contexto nenhum ainda), devolve a qual evento aquele ingresso pertence, pra o frontend auto-selecionar o evento na tela em vez de pedir pra portaria escolher num dropdown. A partir da segunda leitura em diante, o frontend já manda o `eventId` resolvido normalmente pro `/validate`, com `WRONG_EVENT` funcionando exatamente como antes.
+
+**Só leitura** — não verifica o `token`/HMAC (não é uma validação de autenticidade, só "a qual evento esse código pertence") e **não grava** `GateValidation` (não é uma tentativa de validação, é uma consulta).
+
+**200 OK:**
+
+```json
+{ "event": { "id": "uuid", "title": "...", "startsAt": "...", "venue": "CINE_VERZEL_1", "room": 3 } }
+```
+
+**404** se o código não existe — `{ "message": "Ingresso nao encontrado." }`. Nunca expõe dados do dono do ticket, só o evento (já visível no próprio ingresso físico/QR).
+
 ## Estrutura interna
 
 `route -> controller -> service -> repository -> Prisma`:
 
-- `gate.schemas.ts` — validação Zod do corpo (`eventId`, `code`, `token` opcional).
-- `gate.repository.ts` — único lugar que importa `prisma` neste módulo. `findTicketByCode`, `logValidation`, `markUsedAndLog` (a transação condicional + log).
-- `gate.service.ts` — `validateTicket`, os 6 passos acima.
-- `gate.mappers.ts` — `toValidationResponse`.
-- `gate.controller.ts` — 1 handler fino.
+- `gate.schemas.ts` — validação Zod do corpo de `/validate` (`eventId`, `code`, `token` opcional) e do param `code` de `GET /tickets/:code/event`.
+- `gate.repository.ts` — único lugar que importa `prisma` neste módulo. `findTicketByCode` (usado por `validateTicket` e por `resolveTicketEvent`), `logValidation`, `markUsedAndLog` (a transação condicional + log).
+- `gate.service.ts` — `validateTicket` (os 6 passos acima) e `resolveTicketEvent` (busca por `code`, 404 se não achar, devolve o evento).
+- `gate.mappers.ts` — `toValidationResponse`, `toTicketEventSummary`.
+- `gate.controller.ts` — 2 handlers finos.
 
 ## Testes
 
-`tests/gate.test.ts` cobre: validação por QR válida marca `USED`; validar de novo o mesmo ingresso retorna `ALREADY_USED` (não `VALID` de novo); código manual (sem `token`) funciona; código inexistente → `INVALID` com `ticket: null`; `token` incorreto → `INVALID`; ingresso de outro evento → `WRONG_EVENT` (e o ticket continua `VALID` no banco); corrida de duas validações simultâneas do mesmo ingresso (só uma vira `VALID`, a outra `ALREADY_USED`); 401/403 pra quem não é `GATE`; corpo inválido.
+`tests/gate.test.ts` cobre, em `POST /validate`: validação por QR válida marca `USED`; validar de novo o mesmo ingresso retorna `ALREADY_USED` (não `VALID` de novo); código manual (sem `token`) funciona; código inexistente → `INVALID` com `ticket: null`; `token` incorreto → `INVALID`; ingresso de outro evento → `WRONG_EVENT` (e o ticket continua `VALID` no banco); corrida de duas validações simultâneas do mesmo ingresso (só uma vira `VALID`, a outra `ALREADY_USED`); 401/403 pra quem não é `GATE`; corpo inválido. Em `GET /tickets/:code/event`: resolve o evento certo sem marcar nada; 404 pra código inexistente; 401/403 por papel.

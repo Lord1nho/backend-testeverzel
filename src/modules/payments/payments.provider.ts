@@ -39,7 +39,7 @@ export const simulatedPaymentProvider: PaymentProvider = {
     return {
       status: isDeclined ? "DECLINED" : "APPROVED",
       providerReference: `SIMULATED-${randomUUID()}`,
-      failureReason: isDeclined ? "Cartao recusado pelo emissor (simulado)." : null,
+      failureReason: isDeclined ? "Cartão recusado pelo emissor (simulado)." : null,
     };
   },
 };

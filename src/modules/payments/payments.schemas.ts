@@ -6,15 +6,15 @@ const currentYear = new Date().getFullYear();
 // (Luhn, bandeira, etc.). A decisao de aprovar/recusar mora em
 // payments.provider.ts, olhando so pro numero do cartao.
 const cardSchema = z.object({
-  number: z.string().regex(/^\d{13,19}$/, { message: "Numero de cartao invalido." }),
-  holderName: z.string().trim().min(1, { message: "Nome do titular obrigatorio." }),
-  expiryMonth: z.number().int().min(1).max(12, { message: "Mes de validade invalido." }),
-  expiryYear: z.number().int().min(currentYear, { message: "Ano de validade invalido." }),
-  cvv: z.string().regex(/^\d{3,4}$/, { message: "CVV invalido." }),
+  number: z.string().regex(/^\d{13,19}$/, { message: "Número de cartão inválido." }),
+  holderName: z.string().trim().min(1, { message: "Nome do titular obrigatório." }),
+  expiryMonth: z.number().int().min(1).max(12, { message: "Mês de validade inválido." }),
+  expiryYear: z.number().int().min(currentYear, { message: "Ano de validade inválido." }),
+  cvv: z.string().regex(/^\d{3,4}$/, { message: "CVV inválido." }),
 });
 
 export const payReservationBodySchema = z.object({
-  reservationId: z.string().uuid({ message: "reservationId invalido." }),
+  reservationId: z.string().uuid({ message: "reservationId inválido." }),
   card: cardSchema,
 });
 export type PayReservationBody = z.infer<typeof payReservationBodySchema>;

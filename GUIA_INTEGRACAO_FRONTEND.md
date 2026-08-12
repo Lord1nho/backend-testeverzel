@@ -277,21 +277,47 @@ Número de cartão **terminado em `0000`** → sempre **recusado**. Qualquer out
   "tickets": [
     { "id": "ticket-uuid-1", "code": "A1B2C3D4", "status": "VALID" },
     { "id": "ticket-uuid-2", "code": "E5F6G7H8", "status": "VALID" }
-  ]
+  ],
+  "attempt": 1,
+  "maxAttempts": 3
 }
 ```
 
-**200 OK (recusado):**
+### Até 3 tentativas na mesma reserva
+
+Cada reserva aceita até **3 tentativas de pagamento**, não só uma. `attempt` (a tentativa que acabou de acontecer) e `maxAttempts` (sempre `3`) vêm em toda resposta — é o que a tela de checkout usa pra decidir o que mostrar e o que fazer a seguir:
+
+**200 OK (recusado, ainda com tentativa sobrando — `reservationStatus` continua `PENDING_PAYMENT`):**
 
 ```json
 {
-  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartao recusado pelo emissor (simulado).", "paidAt": null },
-  "reservationStatus": "PAYMENT_DECLINED",
-  "tickets": []
+  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartão recusado pelo emissor (simulado).", "paidAt": null },
+  "reservationStatus": "PENDING_PAYMENT",
+  "tickets": [],
+  "attempt": 1,
+  "maxAttempts": 3
 }
 ```
 
-Se recusado, os assentos voltam pra `AVAILABLE` — o Cliente precisa reservar de novo (passo 5) pra tentar outra vez; **não dá pra reenviar pagamento na mesma reserva**. `tickets` aqui é só o resumo (`id`/`code`/`status`) — use `GET /api/tickets/:id` (passo 9) pra ver o QR de cada um.
+Nesse caso o assento **continua reservado** (não volta pra `AVAILABLE`) e a `reservationId` continua válida — a tela deve **ficar no checkout**, mostrar o erro (`payment.failureReason`) e deixar o Cliente tentar de novo com outro cartão, na mesma reserva (mesmo `POST /api/payments` com o mesmo `reservationId`). Uma mensagem como "Cartão recusado. Tentativa {attempt} de {maxAttempts}." dá pra montar direto com esses dois campos.
+
+**200 OK (recusado, tentativas esgotadas — 3ª recusa, `reservationStatus` vira `PAYMENT_DECLINED`):**
+
+```json
+{
+  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartão recusado pelo emissor (simulado).", "paidAt": null },
+  "reservationStatus": "PAYMENT_DECLINED",
+  "tickets": [],
+  "attempt": 3,
+  "maxAttempts": 3
+}
+```
+
+Só agora os assentos voltam pra `AVAILABLE` e a reserva fecha de vez — **não dá mais pra reenviar pagamento nessa `reservationId`** (a 4ª tentativa dá 400). É o momento de mostrar algo como "Muitas tentativas com cartão recusado. Escolha os assentos novamente." e mandar o Cliente de volta pro mapa de assentos (passo 5), já que essa reserva morreu.
+
+Resumindo a lógica da tela: **`reservationStatus === "PENDING_PAYMENT"` depois de uma recusa → continua no checkout; `"PAYMENT_DECLINED"` → acabou, volta pro mapa de assentos.**
+
+`tickets` aqui é só o resumo (`id`/`code`/`status`) — use `GET /api/tickets/:id` (passo 9) pra ver o QR de cada um.
 
 ### Erros
 

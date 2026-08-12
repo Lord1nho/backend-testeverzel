@@ -193,7 +193,7 @@ describe("payments (UC12 - Realizar Pagamento Simulado)", () => {
       expect(sold).toHaveLength(2);
     });
 
-    it("recusa com cartao terminado em 0000: reserva PAYMENT_DECLINED, assentos liberados e reservaveis de novo", async () => {
+    it("recusa a 1a tentativa com cartao terminado em 0000: reserva continua PENDING_PAYMENT, assento continua RESERVED", async () => {
       const event = await createPublishedEvent();
       const seatIds = await getSeatIds(event.id);
       const reservation = await createReservation(customer1Token, event.id, seatIds.slice(0, 1));
@@ -206,8 +206,69 @@ describe("payments (UC12 - Realizar Pagamento Simulado)", () => {
       expect(response.status).toBe(200);
       expect(response.body.payment.status).toBe("DECLINED");
       expect(response.body.payment.failureReason).toBeTruthy();
-      expect(response.body.reservationStatus).toBe("PAYMENT_DECLINED");
+      expect(response.body.reservationStatus).toBe("PENDING_PAYMENT");
+      expect(response.body.attempt).toBe(1);
+      expect(response.body.maxAttempts).toBe(3);
       expect(response.body.tickets).toHaveLength(0);
+
+      const seatsResponse = await request(app).get(`/api/public/events/${event.id}/seats`);
+      const seat = seatsResponse.body.seats.find((s: { id: string }) => s.id === seatIds[0]);
+      expect(seat.status).toBe("RESERVED");
+
+      const dbReservation = await prisma.ticketReservation.findUniqueOrThrow({ where: { id: reservation.id } });
+      expect(dbReservation.paymentAttempts).toBe(1);
+    });
+
+    it("aprova numa tentativa posterior a uma recusa (mesma reserva, assento nunca liberado no meio)", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+      const reservation = await createReservation(customer1Token, event.id, seatIds.slice(0, 1));
+
+      const firstAttempt = await request(app)
+        .post("/api/payments")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ reservationId: reservation.id, card: DECLINED_CARD });
+      expect(firstAttempt.body.reservationStatus).toBe("PENDING_PAYMENT");
+
+      const secondAttempt = await request(app)
+        .post("/api/payments")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ reservationId: reservation.id, card: VALID_CARD });
+
+      expect(secondAttempt.status).toBe(200);
+      expect(secondAttempt.body.payment.status).toBe("APPROVED");
+      expect(secondAttempt.body.reservationStatus).toBe("PAID");
+      expect(secondAttempt.body.attempt).toBe(2);
+      expect(secondAttempt.body.tickets).toHaveLength(1);
+
+      const seatsResponse = await request(app).get(`/api/public/events/${event.id}/seats`);
+      const seat = seatsResponse.body.seats.find((s: { id: string }) => s.id === seatIds[0]);
+      expect(seat.status).toBe("SOLD");
+    });
+
+    it("esgota as 3 tentativas: so a 3a recusa fecha a reserva e libera o assento pra reserva de novo", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+      const reservation = await createReservation(customer1Token, event.id, seatIds.slice(0, 1));
+
+      for (const expectedAttempt of [1, 2]) {
+        const response = await request(app)
+          .post("/api/payments")
+          .set("Authorization", `Bearer ${customer1Token}`)
+          .send({ reservationId: reservation.id, card: DECLINED_CARD });
+        expect(response.body.attempt).toBe(expectedAttempt);
+        expect(response.body.reservationStatus).toBe("PENDING_PAYMENT");
+      }
+
+      const finalResponse = await request(app)
+        .post("/api/payments")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ reservationId: reservation.id, card: DECLINED_CARD });
+
+      expect(finalResponse.status).toBe(200);
+      expect(finalResponse.body.attempt).toBe(3);
+      expect(finalResponse.body.reservationStatus).toBe("PAYMENT_DECLINED");
+      expect(finalResponse.body.tickets).toHaveLength(0);
 
       const seatsResponse = await request(app).get(`/api/public/events/${event.id}/seats`);
       const seat = seatsResponse.body.seats.find((s: { id: string }) => s.id === seatIds[0]);
@@ -215,6 +276,26 @@ describe("payments (UC12 - Realizar Pagamento Simulado)", () => {
 
       const retryReservation = await createReservation(customer2Token, event.id, seatIds.slice(0, 1));
       expect(retryReservation.id).toBeTruthy();
+    });
+
+    it("retorna 400 pra uma 4a tentativa depois das 3 esgotadas", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+      const reservation = await createReservation(customer1Token, event.id, seatIds.slice(0, 1));
+
+      for (let i = 0; i < 3; i += 1) {
+        await request(app)
+          .post("/api/payments")
+          .set("Authorization", `Bearer ${customer1Token}`)
+          .send({ reservationId: reservation.id, card: DECLINED_CARD });
+      }
+
+      const fourthAttempt = await request(app)
+        .post("/api/payments")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ reservationId: reservation.id, card: VALID_CARD });
+
+      expect(fourthAttempt.status).toBe(400);
     });
 
     it("condicao de corrida: duas tentativas de pagamento simultaneas na mesma reserva, so uma vence", async () => {
@@ -238,6 +319,38 @@ describe("payments (UC12 - Realizar Pagamento Simulado)", () => {
 
       const payments = await prisma.simulatedPayment.findMany({ where: { reservationId: reservation.id } });
       expect(payments).toHaveLength(1);
+    });
+
+    it("condicao de corrida no limite: duas recusas simultaneas disputando a 3a (ultima) tentativa, so uma fecha a reserva", async () => {
+      const event = await createPublishedEvent();
+      const seatIds = await getSeatIds(event.id);
+      const reservation = await createReservation(customer1Token, event.id, seatIds.slice(0, 1));
+
+      await request(app)
+        .post("/api/payments")
+        .set("Authorization", `Bearer ${customer1Token}`)
+        .send({ reservationId: reservation.id, card: DECLINED_CARD });
+
+      const [responseA, responseB] = await Promise.all([
+        request(app)
+          .post("/api/payments")
+          .set("Authorization", `Bearer ${customer1Token}`)
+          .send({ reservationId: reservation.id, card: DECLINED_CARD }),
+        request(app)
+          .post("/api/payments")
+          .set("Authorization", `Bearer ${customer1Token}`)
+          .send({ reservationId: reservation.id, card: DECLINED_CARD }),
+      ]);
+
+      const attempts = [responseA.body.attempt, responseB.body.attempt].sort();
+      expect(attempts).toEqual([2, 3]);
+
+      const dbReservation = await prisma.ticketReservation.findUniqueOrThrow({ where: { id: reservation.id } });
+      expect(dbReservation.status).toBe("PAYMENT_DECLINED");
+      expect(dbReservation.paymentAttempts).toBe(3);
+
+      const payments = await prisma.simulatedPayment.findMany({ where: { reservationId: reservation.id } });
+      expect(payments).toHaveLength(3);
     });
 
     it("retorna 400 quando a reserva ja nao esta PENDING_PAYMENT", async () => {

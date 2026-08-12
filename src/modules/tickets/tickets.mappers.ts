@@ -1,3 +1,4 @@
+import { toEventBasicSummary } from "../../shared/mappers/event-basic-summary.js";
 import { buildQrValue } from "../../shared/security/ticket-qr.js";
 import type { Event, EventSeat, Ticket } from "../../../generated/prisma/client.js";
 
@@ -10,13 +11,7 @@ export function toTicketSummary(ticket: TicketRow) {
     code: ticket.code,
     issuedAt: ticket.issuedAt,
     usedAt: ticket.usedAt,
-    event: {
-      id: ticket.event.id,
-      title: ticket.event.title,
-      startsAt: ticket.event.startsAt,
-      venue: ticket.event.venue,
-      room: ticket.event.room,
-    },
+    event: toEventBasicSummary(ticket.event),
     seat: { id: ticket.eventSeat.id, code: ticket.eventSeat.code },
   };
 }

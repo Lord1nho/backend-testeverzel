@@ -14,11 +14,11 @@ const RESERVATION_HOLD_MINUTES = 15;
 export async function createReservation(customerId: string, body: CreateReservationBody) {
   const event = await eventsRepository.findPublishedEventForReservation(body.eventId);
   if (!event) {
-    throw new AppError("Evento nao encontrado ou nao publicado.", 404);
+    throw new AppError("Evento não encontrado ou não publicado.", 404);
   }
 
   if (event.startsAt.getTime() < Date.now()) {
-    throw new AppError("Evento ja comecou ou encerrou, reserva nao permitida.", 400);
+    throw new AppError("Evento já começou ou encerrou, reserva não permitida.", 400);
   }
 
   const expiresAt = new Date(Date.now() + RESERVATION_HOLD_MINUTES * 60 * 1000);
@@ -37,7 +37,7 @@ export async function createReservation(customerId: string, body: CreateReservat
 export async function getReservationById(customerId: string, reservationId: string) {
   const reservation = await reservationsRepository.findByIdAndCustomer(reservationId, customerId);
   if (!reservation) {
-    throw new AppError("Reserva nao encontrada.", 404);
+    throw new AppError("Reserva não encontrada.", 404);
   }
   return toReservationDetail(reservation);
 }
@@ -47,7 +47,7 @@ export async function getReservationById(customerId: string, reservationId: stri
 export async function cancelReservation(customerId: string, reservationId: string) {
   const reservation = await reservationsRepository.cancelReservation(reservationId, customerId);
   if (!reservation) {
-    throw new AppError("Reserva nao encontrada.", 404);
+    throw new AppError("Reserva não encontrada.", 404);
   }
   return toReservationDetail(reservation);
 }

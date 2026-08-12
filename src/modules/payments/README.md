@@ -42,28 +42,45 @@ Validação é só de formato (`number`: 13-19 dígitos, `expiryMonth`: 1-12, `e
 }
 ```
 
-**200 OK (recusado):**
+**200 OK (recusado, ainda com tentativa sobrando):**
 
 ```json
 {
-  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartao recusado pelo emissor (simulado).", "paidAt": null },
-  "reservationStatus": "PAYMENT_DECLINED",
-  "tickets": []
+  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartão recusado pelo emissor (simulado).", "paidAt": null },
+  "reservationStatus": "PENDING_PAYMENT",
+  "tickets": [],
+  "attempt": 1,
+  "maxAttempts": 3
 }
 ```
+
+**200 OK (recusado, tentativas esgotadas — 3ª recusa):**
+
+```json
+{
+  "payment": { "id": "uuid", "status": "DECLINED", "amount": 71.0, "failureReason": "Cartão recusado pelo emissor (simulado).", "paidAt": null },
+  "reservationStatus": "PAYMENT_DECLINED",
+  "tickets": [],
+  "attempt": 3,
+  "maxAttempts": 3
+}
+```
+
+`attempt`/`maxAttempts` dão ao frontend o que falta pra decidir a tela: `reservationStatus: "PENDING_PAYMENT"` depois de uma recusa significa que ainda há tentativa sobrando (fica no checkout, deixa tentar de novo); `"PAYMENT_DECLINED"` significa esgotado (a reserva fechou, precisa reservar de novo pra tentar outra vez).
 
 Pra ver o QR Code de cada ticket emitido, use `GET /api/tickets/:id` (módulo `tickets`) — o `code` aqui é só um resumo.
 
 ## Regra de negócio (skill `reserva-segura`)
 
-Dentro de uma única transação (`payments.repository.ts`, `processPayment`):
+Até **3 tentativas de pagamento por reserva** (decisão de produto — não é o padrão geral da skill `reserva-segura`, que manda liberar o assento assim que a recusa acontece; aqui é uma exceção deliberada e restrita: só a tentativa **final** libera). Dentro de uma única transação (`payments.repository.ts`, `processPayment`):
 
-1. `UPDATE` condicional na `TicketReservation` (`WHERE status = 'PENDING_PAYMENT'`) pro novo status — recheck atômico que impede duas tentativas de pagamento concorrentes na mesma reserva de ambas "vencerem" (a que perde recebe **409**, nem chega a criar `SimulatedPayment`).
-2. Cria o `SimulatedPayment` (registra a tentativa, aprovada ou recusada).
-3. **Aprovado:** assentos da reserva `RESERVED -> SOLD`; cria **um `Ticket` por assento** (não um por reserva — uma reserva com 2 assentos gera 2 tickets, cada um com seu próprio `eventSeatId`, `code` e QR).
-4. **Recusado:** assentos da reserva `RESERVED -> AVAILABLE` (libera o bloqueio — nenhum ticket é criado).
+1. "Claim" da tentativa: `UPDATE` condicional na `TicketReservation` (`WHERE status = 'PENDING_PAYMENT' AND paymentAttempts < 3`, incrementando `paymentAttempts`) — recheck atômico que impede duas tentativas concorrentes de "roubarem" o mesmo número de tentativa, ou uma tentativa entrar depois que a reserva já foi resolvida por outra corrida (quem perde recebe **409**, nem chega a criar `SimulatedPayment`). Como esse claim já serializa o acesso (o lock de linha do Postgres dura até o fim da transação), nenhum outro passo abaixo precisa de recheck próprio.
+2. Cria o `SimulatedPayment` (registra a tentativa, aprovada ou recusada — toda tentativa fica registrada, mesmo as intermediárias).
+3. **Aprovado** (em qualquer tentativa, 1ª a 3ª): reserva `PAID`; assentos `RESERVED -> SOLD`; cria **um `Ticket` por assento** (não um por reserva — uma reserva com 2 assentos gera 2 tickets, cada um com seu próprio `eventSeatId`, `code` e QR).
+4. **Recusado, tentativa 1 ou 2**: reserva continua `PENDING_PAYMENT`, assentos continuam `RESERVED` — o Cliente fica na mesma reserva/checkout e tenta de novo, sem perder o lugar.
+5. **Recusado, tentativa 3 (final)**: reserva `PAYMENT_DECLINED`, assentos `RESERVED -> AVAILABLE` (libera o bloqueio — nenhum ticket é criado). A partir daqui a reserva está fechada — o Cliente precisa reservar de novo (`POST /api/reservations`) pra ter 3 tentativas novas.
 
-Uma reserva só aceita **uma tentativa de pagamento**: depois de `PAID` ou `PAYMENT_DECLINED`, uma nova chamada em `POST /api/payments` com o mesmo `reservationId` sempre falha (400 ou 409, dependendo da corrida). Se a primeira tentativa for recusada, o Cliente precisa reservar de novo (`POST /api/reservations`) — os assentos já não estão mais garantidos pra essa reserva.
+Uma nova chamada em `POST /api/payments` com um `reservationId` já `PAID` ou `PAYMENT_DECLINED` (esgotado) sempre falha (400 ou 409, dependendo da corrida).
 
 ## Expiração preguiçosa (lazy) da reserva
 
@@ -92,11 +109,11 @@ Cada `Ticket` aprovado recebe:
 
 - `payments.provider.ts` — abstração `PaymentProvider` + `simulatedPaymentProvider` (regra do cartão terminado em `0000`).
 - `payments.schemas.ts` — validação Zod do corpo (`reservationId` + `card`).
-- `payments.repository.ts` — único lugar que importa `prisma` neste módulo. `processPayment` concentra a transação completa (reserva + pagamento + assentos + tickets). `expireReservationIfPastDue` concentra a transação de expiração preguiçosa.
+- `payments.repository.ts` — único lugar que importa `prisma` neste módulo. `processPayment` concentra a transação completa (claim da tentativa + pagamento + assentos + tickets), `MAX_PAYMENT_ATTEMPTS` (3) é a constante do limite. `expireReservationIfPastDue` concentra a transação de expiração preguiçosa.
 - `payments.service.ts` — `payForReservation`: busca a reserva via `reservationsRepository.findByIdAndCustomer` (módulo `reservations`), valida estado/expiração, chama o provider e o repository.
 - `payments.mappers.ts` — `toPaymentResult`.
 - `payments.controller.ts` — 1 handler fino.
 
 ## Testes
 
-`tests/payments.test.ts` cobre: aprovação (reserva `PAID`, assentos `SOLD`, um ticket por assento com o `eventSeatId` certo), recusa por cartão terminado em `0000` (reserva `PAYMENT_DECLINED`, assentos liberados e reserváveis de novo por outro cliente), corrida de duas tentativas de pagamento simultâneas na mesma reserva (só uma vence, 409 na outra), reserva expirada (400, assentos liberados), 404 pra reserva de outro cliente/inexistente, validação de corpo, e 401/403 por papel.
+`tests/payments.test.ts` cobre: aprovação (reserva `PAID`, assentos `SOLD`, um ticket por assento com o `eventSeatId` certo), 1ª recusa por cartão terminado em `0000` (reserva continua `PENDING_PAYMENT`, assento continua `RESERVED`, `attempt: 1`), aprovar numa tentativa posterior a uma recusa sem o assento nunca ter sido liberado no meio, esgotar as 3 tentativas (só a 3ª recusa fecha a reserva e libera o assento, reservável de novo por outro cliente), 4ª tentativa depois de esgotado (400), corrida de duas tentativas de pagamento simultâneas numa reserva nova (só uma vence, 409 na outra), corrida de duas recusas simultâneas disputando a tentativa final (só uma fecha a reserva, `paymentAttempts` fica em 3, nunca ultrapassa), reserva expirada (400, assentos liberados), 404 pra reserva de outro cliente/inexistente, validação de corpo, e 401/403 por papel.

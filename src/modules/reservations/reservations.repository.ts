@@ -36,7 +36,7 @@ export function createReservationWithSeats(input: CreateReservationInput) {
     });
 
     if (seatsUpdate.count !== input.seatIds.length) {
-      throw new AppError("Um ou mais assentos selecionados nao estao mais disponiveis.", 409);
+      throw new AppError("Um ou mais assentos selecionados não estão mais disponíveis.", 409);
     }
 
     const reservation = await tx.ticketReservation.create({
@@ -90,7 +90,7 @@ export async function cancelReservation(id: string, customerId: string) {
     }
 
     if (reservation.status !== "PENDING_PAYMENT") {
-      throw new AppError("Reserva nao pode ser cancelada nesse estado.", 400);
+      throw new AppError("Reserva não pode ser cancelada nesse estado.", 400);
     }
 
     const cancelled = await tx.ticketReservation.updateMany({
@@ -99,7 +99,7 @@ export async function cancelReservation(id: string, customerId: string) {
     });
 
     if (cancelled.count !== 1) {
-      throw new AppError("Reserva nao pode ser cancelada nesse estado.", 400);
+      throw new AppError("Reserva não pode ser cancelada nesse estado.", 400);
     }
 
     await tx.eventSeat.updateMany({

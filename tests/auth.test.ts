@@ -80,7 +80,7 @@ describe("auth", () => {
         .send({ email: TEST_USER.email, password: "senha-errada" });
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toBe("Credenciais invalidas.");
+      expect(response.body.message).toBe("Credenciais inválidas.");
     });
 
     it("rejeita email inexistente com 401 e a MESMA mensagem generica", async () => {
@@ -89,14 +89,14 @@ describe("auth", () => {
         .send({ email: "nao-existe@example.com", password: "qualquer" });
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toBe("Credenciais invalidas.");
+      expect(response.body.message).toBe("Credenciais inválidas.");
     });
 
     it("retorna 400 quando falta email ou password", async () => {
       const response = await request(app).post("/api/auth/login").send({});
 
       expect(response.status).toBe(400);
-      expect(response.body.message).toBe("Erro de validacao.");
+      expect(response.body.message).toBe("Erro de validação.");
     });
 
     it("retorna 400 quando email tem formato invalido", async () => {
@@ -161,7 +161,7 @@ describe("auth", () => {
       const response = await request(app).get("/api/auth/me");
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toBe("Token de autenticacao ausente.");
+      expect(response.body.message).toBe("Token de autenticação ausente.");
     });
 
     it("retorna 401 com token invalido/malformado no header", async () => {
@@ -180,7 +180,7 @@ describe("auth", () => {
         .set("Authorization", `Bearer ${expiredToken}`);
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toBe("Token invalido ou expirado.");
+      expect(response.body.message).toBe("Token inválido ou expirado.");
     });
   });
 });
