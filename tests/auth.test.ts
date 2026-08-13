@@ -106,6 +106,24 @@ describe("auth", () => {
 
       expect(response.status).toBe(400);
     });
+
+    it("retorna 400 quando a senha contem espaco", async () => {
+      const response = await request(app)
+        .post("/api/auth/login")
+        .send({ email: TEST_USER.email, password: "123 456" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Erro de validação.");
+    });
+
+    it("retorna 400 quando a senha tem espaco no inicio ou no fim", async () => {
+      const response = await request(app)
+        .post("/api/auth/login")
+        .send({ email: TEST_USER.email, password: " 123456" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Erro de validação.");
+    });
   });
 
   describe("POST /api/auth/logout", () => {
