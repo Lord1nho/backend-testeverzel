@@ -81,6 +81,19 @@ function splitQrValue(qrValue: string) {
   return { code: qrValue.slice(0, separatorIndex), token: qrValue.slice(separatorIndex + 1) };
 }
 
+// Todo evento de teste nasce com startsAt milhares de dias no futuro
+// (nextStartsAt(), pra nunca colidir de sala/horario entre testes) --
+// fora da janela de entrada da portaria. Adianta so o startsAt no banco
+// pra trazer a sessao pra dentro da janela valida, sem mexer no relogio
+// do sistema nem no resto do fluxo de compra (mesmo padrao ja usado em
+// events.test.ts/reservations.test.ts).
+async function bringEventIntoEntryWindow(eventId: string) {
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { startsAt: new Date(Date.now() - 5 * 60 * 1000) },
+  });
+}
+
 async function cleanupTestData() {
   const events = await prisma.event.findMany({
     where: { organizer: { email: ORGANIZER.email } },
@@ -189,6 +202,7 @@ describe("gate (UC16-20 - Validacao de Ingresso na Portaria)", () => {
     it("valida por QR: resultado VALID e marca o ticket como USED", async () => {
       const event = await createPublishedEvent();
       const ticket = await createPaidTicketWithQr(event.id);
+      await bringEventIntoEntryWindow(event.id);
       const { code, token } = splitQrValue(ticket.qrValue);
 
       const response = await request(app)
@@ -208,6 +222,7 @@ describe("gate (UC16-20 - Validacao de Ingresso na Portaria)", () => {
     it("valida o mesmo ingresso de novo -> ALREADY_USED, nao VALID de novo", async () => {
       const event = await createPublishedEvent();
       const ticket = await createPaidTicketWithQr(event.id);
+      await bringEventIntoEntryWindow(event.id);
       const { code, token } = splitQrValue(ticket.qrValue);
 
       await request(app)
@@ -227,6 +242,7 @@ describe("gate (UC16-20 - Validacao de Ingresso na Portaria)", () => {
     it("codigo manual (sem token) funciona", async () => {
       const event = await createPublishedEvent();
       const ticket = await createPaidTicketWithQr(event.id);
+      await bringEventIntoEntryWindow(event.id);
       const { code } = splitQrValue(ticket.qrValue);
 
       const response = await request(app)
@@ -288,6 +304,7 @@ describe("gate (UC16-20 - Validacao de Ingresso na Portaria)", () => {
     it("condicao de corrida: duas validacoes simultaneas do mesmo ingresso, so uma vira VALID", async () => {
       const event = await createPublishedEvent();
       const ticket = await createPaidTicketWithQr(event.id);
+      await bringEventIntoEntryWindow(event.id);
       const { code, token } = splitQrValue(ticket.qrValue);
 
       const [responseA, responseB] = await Promise.all([
@@ -306,6 +323,72 @@ describe("gate (UC16-20 - Validacao de Ingresso na Portaria)", () => {
 
       const dbTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
       expect(dbTicket.status).toBe("USED");
+    });
+
+    it("ingresso de sessao em outra data -> INVALID, fora da janela de entrada", async () => {
+      const event = await createPublishedEvent();
+      const ticket = await createPaidTicketWithQr(event.id);
+      const { code, token } = splitQrValue(ticket.qrValue);
+
+      const response = await request(app)
+        .post("/api/gate/validate")
+        .set("Authorization", `Bearer ${gateToken}`)
+        .send({ eventId: event.id, code, token });
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toBe("INVALID");
+      expect(response.body.reason).toBe("Ingresso é para outra data de sessão.");
+
+      const dbTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(dbTicket.status).toBe("VALID");
+    });
+
+    it("mais de 20min antes do inicio (mesmo dia) -> INVALID, entrada ainda nao liberada", async () => {
+      const event = await createPublishedEvent({
+        startsAt: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+        room: 2,
+      });
+      const ticket = await createPaidTicketWithQr(event.id);
+      const { code, token } = splitQrValue(ticket.qrValue);
+
+      const response = await request(app)
+        .post("/api/gate/validate")
+        .set("Authorization", `Bearer ${gateToken}`)
+        .send({ eventId: event.id, code, token });
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toBe("INVALID");
+      expect(response.body.reason).toBe(
+        "Entrada ainda não liberada. Aguarde até 20 minutos antes do início da sessão.",
+      );
+
+      const dbTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(dbTicket.status).toBe("VALID");
+    });
+
+    it("depois do fim da sessao -> INVALID, sessao encerrada", async () => {
+      const event = await createPublishedEvent({
+        startsAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        room: 3,
+      });
+      const ticket = await createPaidTicketWithQr(event.id);
+      await prisma.event.update({
+        where: { id: event.id },
+        data: { startsAt: new Date(Date.now() - 5 * 60 * 60 * 1000) },
+      });
+      const { code, token } = splitQrValue(ticket.qrValue);
+
+      const response = await request(app)
+        .post("/api/gate/validate")
+        .set("Authorization", `Bearer ${gateToken}`)
+        .send({ eventId: event.id, code, token });
+
+      expect(response.status).toBe(200);
+      expect(response.body.result).toBe("INVALID");
+      expect(response.body.reason).toBe("Sessão encerrada. Entrada não é mais permitida.");
+
+      const dbTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(dbTicket.status).toBe("VALID");
     });
 
     it("retorna 401 sem token e 403 para quem nao e GATE", async () => {

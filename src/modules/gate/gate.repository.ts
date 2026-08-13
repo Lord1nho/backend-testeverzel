@@ -2,7 +2,7 @@ import { prisma } from "../../shared/prisma/client.js";
 import type { Prisma, ValidationInputMethod, ValidationResult } from "../../../generated/prisma/client.js";
 
 const ticketWithDetailsInclude = {
-  event: true,
+  event: { include: { catalogItem: true } },
   eventSeat: true,
 } satisfies Prisma.TicketInclude;
 
