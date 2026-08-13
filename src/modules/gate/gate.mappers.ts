@@ -14,10 +14,19 @@ export function toTicketEventSummary(ticket: Pick<TicketRow, "event">) {
 // e ALREADY_USED expõem so um resumo basico (id/code/evento) -- o
 // suficiente pra portaria mostrar "esse ingresso e de outro evento" ou "ja
 // foi usado", sem vazar dados do dono do ticket (nome, e-mail, customerId).
-// INVALID (ou ticket nao encontrado) nunca expõe nada.
-export function toValidationResponse(result: ValidationResult, ticket: TicketRow | null) {
+// INVALID (ou ticket nao encontrado) nunca expõe nada alem do motivo.
+//
+// `reason` sai sempre na resposta (nao so no log de auditoria) pra o
+// frontend diferenciar os varios motivos de INVALID (codigo inexistente,
+// QR forjado, cancelado, fora da janela de entrada etc.) sem precisar
+// adivinhar a partir so do `result`.
+export function toValidationResponse(
+  result: ValidationResult,
+  ticket: TicketRow | null,
+  reason: string | null = null,
+) {
   if (result === "INVALID" || !ticket) {
-    return { result, ticket: null };
+    return { result, ticket: null, reason };
   }
 
   if (result === "VALID") {
@@ -30,6 +39,7 @@ export function toValidationResponse(result: ValidationResult, ticket: TicketRow
         seat: { id: ticket.eventSeat.id, code: ticket.eventSeat.code },
         usedAt: ticket.usedAt,
       },
+      reason,
     };
   }
 
@@ -40,5 +50,6 @@ export function toValidationResponse(result: ValidationResult, ticket: TicketRow
       code: ticket.code,
       event: { id: ticket.event.id, title: ticket.event.title },
     },
+    reason,
   };
 }

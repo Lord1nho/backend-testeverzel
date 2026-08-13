@@ -41,7 +41,7 @@ Alternativamente, rotas protegidas tambem aceitam `Authorization: Bearer <token>
 
 | Status | Quando | Body |
 | --- | --- | --- |
-| 400 | `email`/`password` ausentes ou `email` com formato invalido | `{ "message": "Erro de validacao.", "issues": [...] }` |
+| 400 | `email`/`password` ausentes, `email` com formato invalido, ou `password` contendo espaco | `{ "message": "Erro de validacao.", "issues": [...] }` |
 | 401 | e-mail nao cadastrado OU senha incorreta | `{ "message": "Credenciais invalidas." }` |
 
 Nota de seguranca: as duas causas de 401 (e-mail inexistente vs senha errada) retornam a **mesma** mensagem generica, para nao permitir enumerar e-mails cadastrados.
@@ -140,4 +140,4 @@ O frontend deve mandar `credentials: "include"` (fetch) ou `withCredentials: tru
 
 ## Testes
 
-`tests/auth.test.ts` (vitest + supertest) cobre: login com sucesso (sem token no body, cookie httpOnly com os atributos corretos), senha errada, e-mail inexistente, validacao de body, logout (limpa o cookie e libera de novo, funciona mesmo deslogado), e `/me` via cookie, via header (fallback), e os casos de erro (ausente/invalido/expirado). Requer Postgres local no ar (`npm run db:up`) e migrations aplicadas (`npm run prisma:migrate`).
+`tests/auth.test.ts` (vitest + supertest) cobre: login com sucesso (sem token no body, cookie httpOnly com os atributos corretos), senha errada, e-mail inexistente, validacao de body (incluindo senha com espaco, no meio ou nas pontas), logout (limpa o cookie e libera de novo, funciona mesmo deslogado), e `/me` via cookie, via header (fallback), e os casos de erro (ausente/invalido/expirado). Requer Postgres local no ar (`npm run db:up`) e migrations aplicadas (`npm run prisma:migrate`).
