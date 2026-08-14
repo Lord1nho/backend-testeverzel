@@ -2,7 +2,9 @@
 
 Este guia cobre a jornada completa do **Cliente** (ator) na Plataforma de Eventos e Ingressos: consultar eventos publicados, ver detalhes, escolher assentos, reservar, pagar (simulado), ver o ingresso e compartilhar por link. Corresponde a **UC7, UC9, UC10, UC11, UC12, UC13, UC14 e UC15** do [documento de casos de uso](planning-back-end/teste-verzel-casos-de-uso-textual-v1.md).
 
-> **Fora do ar por enquanto:** só UC8 (busca/filtro), que ficou fora de escopo. Todo o resto do fluxo do Cliente, da navegação até o ingresso com QR, já está implementado. UC16-20 (portaria) também já existe (`POST /api/gate/validate`, ver [src/modules/gate/README.md](src/modules/gate/README.md)), mas é usado pelo app da portaria, não pelo app do Cliente que este guia cobre.
+> Outros papéis (Organizador, Portaria) têm guias próprios: [GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md](GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md) e [GUIA_INTEGRACAO_FRONTEND_PORTARIA.md](GUIA_INTEGRACAO_FRONTEND_PORTARIA.md).
+
+> **Fora do ar por enquanto:** só UC8 (busca/filtro), que ficou fora de escopo. Todo o resto do fluxo do Cliente, da navegação até o ingresso com QR, já está implementado.
 
 ## Base URL
 
@@ -31,6 +33,17 @@ cliente1@demo.com / 123456   (role CUSTOMER, já com 1 ingresso pago)
 cliente2@demo.com / 123456   (role CUSTOMER)
 ```
 
+## Rotas públicas usadas neste fluxo (sem autenticação)
+
+| Método | Rota |
+| --- | --- |
+| POST | `/api/auth/login` |
+| POST | `/api/auth/logout` |
+| GET | `/api/public/events` |
+| GET | `/api/public/events/:id` |
+| GET | `/api/public/events/:id/seats` |
+| GET | `/api/public/tickets/:token` |
+
 ## Visão geral do fluxo
 
 ```
@@ -54,7 +67,7 @@ Não existe carrinho: a seleção de assentos (UC11) acontece no cliente (fronte
 
 ## 1. `GET /api/public/events` — UC7 (Consultar Eventos Publicados)
 
-Sem autenticação. Sem paginação/busca nesta rodada (UC8 fica pra depois — trazer todos e filtrar/paginar no frontend se necessário).
+**Rota pública, sem autenticação.** Sem paginação/busca nesta rodada (UC8 fica pra depois — trazer todos e filtrar/paginar no frontend se necessário).
 
 ```bash
 curl http://localhost:3333/api/public/events
@@ -90,7 +103,7 @@ Use `catalogItem.imageUrl` como poster do card. `seatsAvailable` já vem calcula
 
 ## 2. `GET /api/public/events/:id` — UC9 (Visualizar Detalhes do Evento)
 
-Sem autenticação.
+**Rota pública, sem autenticação.**
 
 ```bash
 curl http://localhost:3333/api/public/events/0f5a...uuid
@@ -133,7 +146,7 @@ curl http://localhost:3333/api/public/events/0f5a...uuid
 
 ## 3. `GET /api/public/events/:id/seats` — mapa de assentos (apoio a UC9/UC11)
 
-Sem autenticação. Retorna **todos** os assentos, com status, pra pintar o mapa (verde = disponível, cinza = ocupado):
+**Rota pública, sem autenticação.** Retorna **todos** os assentos, com status, pra pintar o mapa (verde = disponível, cinza = ocupado):
 
 ```bash
 curl http://localhost:3333/api/public/events/0f5a...uuid/seats
@@ -151,7 +164,7 @@ curl http://localhost:3333/api/public/events/0f5a...uuid/seats
 }
 ```
 
-Já vem ordenado visualmente (`A1, A2, ..., A10, B1, ...`). Só `status: "AVAILABLE"` pode ser selecionado pelo cliente; `RESERVED` (alguém reservando/pagando) e `SOLD` (venda concluída — ainda não alcançável nesta rodada, pois depende do módulo de pagamento) devem aparecer desabilitados.
+Já vem ordenado visualmente (`A1, A2, ..., A10, B1, ...`). Só `status: "AVAILABLE"` pode ser selecionado pelo cliente; `RESERVED` (alguém reservando/pagando) e `SOLD` (venda concluída) devem aparecer desabilitados.
 
 `seat.id` é o valor que vai em `seatIds` no passo 5 — **não use `code`**.
 
@@ -378,7 +391,7 @@ curl -b cookiejar.txt -X POST http://localhost:3333/api/tickets/ticket-uuid/shar
 
 **201 Created:** `{ "shareLink": { "token": "aB3d...", "expiresAt": null } }` — o `token` só aparece **nesta resposta**; monte a URL de compartilhamento no frontend (ex: `https://seu-app.com/ingressos/compartilhado/<token>`) apontando pro passo seguinte.
 
-**`GET /api/public/tickets/:token`** (sem autenticação — é a tela que quem recebe o link abre):
+**`GET /api/public/tickets/:token`** — **rota pública, sem autenticação** (é a tela que quem recebe o link abre):
 
 ```bash
 curl http://localhost:3333/api/public/tickets/aB3d...
@@ -392,10 +405,11 @@ curl http://localhost:3333/api/public/tickets/aB3d...
 
 | Método | Rota | Autenticação | Caso de uso |
 | --- | --- | --- | --- |
-| GET | `/api/public/events` | nenhuma | UC7 |
-| GET | `/api/public/events/:id` | nenhuma | UC9 |
-| GET | `/api/public/events/:id/seats` | nenhuma | apoio a UC9/UC11 |
-| POST | `/api/auth/login` | nenhuma | UC1 |
+| GET | `/api/public/events` | **nenhuma (pública)** | UC7 |
+| GET | `/api/public/events/:id` | **nenhuma (pública)** | UC9 |
+| GET | `/api/public/events/:id/seats` | **nenhuma (pública)** | apoio a UC9/UC11 |
+| POST | `/api/auth/login` | **nenhuma (pública)** | UC1 |
+| POST | `/api/auth/logout` | **nenhuma (pública)** | — |
 | POST | `/api/reservations` | `CUSTOMER` | UC10 + UC11 |
 | GET | `/api/reservations/:id` | `CUSTOMER` (dono) | UC10 |
 | POST | `/api/reservations/:id/cancel` | `CUSTOMER` (dono) | UC10 (desistir antes de pagar) |
@@ -403,12 +417,14 @@ curl http://localhost:3333/api/public/tickets/aB3d...
 | GET | `/api/tickets` | `CUSTOMER` | UC13 |
 | GET | `/api/tickets/:id` | `CUSTOMER` (dono) | UC14 |
 | POST | `/api/tickets/:id/share` | `CUSTOMER` (dono) | UC15 |
-| GET | `/api/public/tickets/:token` | nenhuma | UC15 (view compartilhada) |
+| GET | `/api/public/tickets/:token` | **nenhuma (pública)** | UC15 (view compartilhada) |
 
-Documentação completa de cada módulo (incluindo o lado do Organizador, que o app do cliente não usa): [src/modules/events/README.md](src/modules/events/README.md), [src/modules/reservations/README.md](src/modules/reservations/README.md), [src/modules/payments/README.md](src/modules/payments/README.md) e [src/modules/tickets/README.md](src/modules/tickets/README.md).
+Documentação completa de cada módulo: [src/modules/reservations/README.md](src/modules/reservations/README.md), [src/modules/payments/README.md](src/modules/payments/README.md) e [src/modules/tickets/README.md](src/modules/tickets/README.md).
 
 ## Base URL de produção
 
 Depois do deploy (ver seção "Deploy" do `README.md` raiz), a API roda no Render em `https://<seu-servico>.onrender.com/api` — troque a Base URL da seção 1 deste guia por essa URL no build de produção do frontend (variável de ambiente do projeto na Vercel). O plano free do Render "dorme" após inatividade: a primeira requisição depois de um tempo parado pode demorar alguns segundos a mais para responder (não é bug).
 
 O cookie de sessão só atravessa domínios diferentes (frontend na Vercel, backend no Render) porque em produção ele sai com `sameSite: "none"` + `secure: true` (ver `src/modules/auth/auth.controller.ts`) — o frontend precisa mandar `credentials: "include"` (fetch) ou `withCredentials: true` (axios) em toda chamada, como já indicado na seção "Autenticação".
+
+**Limitação conhecida:** esse cookie cross-site é bloqueado por padrão em aba anônima/privada e em todo navegador no iOS (WebKit força ITP mesmo no Chrome/Firefox pra iOS) — nesses casos o login falha silenciosamente do lado do frontend. Ver [src/modules/auth/README.md](src/modules/auth/README.md) pra detalhes.

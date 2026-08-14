@@ -2,7 +2,7 @@
 
 Proxy de leitura pro TMDB (The Movie Database) — deixa o Organizador buscar/listar/detalhar filmes pra usar como base de um evento. Implementa UC3 - Selecionar Item do Catalogo Externo.
 
-**Esse modulo nao persiste nada no banco.** Salvar o snapshot do filme escolhido em `ExternalCatalogItem` e vincular a um `Event` e responsabilidade do futuro modulo `events` — aqui e so consulta.
+**Esse modulo nao persiste nada no banco.** Salvar o snapshot do filme escolhido em `ExternalCatalogItem` e vincular a um `Event` e responsabilidade do modulo `events` (ver [src/modules/events/README.md](../events/README.md)) — aqui e so consulta.
 
 **Autenticacao:** todas as rotas exigem `authenticate` + `authorizeRole("ORGANIZER")` — e ferramenta exclusiva do fluxo de criacao de evento, nenhum outro papel usa isso.
 

@@ -58,7 +58,7 @@ route -> controller -> service/use-case -> repository -> Prisma/Postgres
 
 UC8 (busca/filtro de eventos) fica fora de escopo por decisao consciente do time — ver os READMEs de `events`.
 
-Guia completo do fluxo do Cliente (endpoint a endpoint, com exemplos de `curl`): [GUIA_INTEGRACAO_FRONTEND.md](GUIA_INTEGRACAO_FRONTEND.md).
+Guias de integracao frontend, um por papel (endpoint a endpoint, com exemplos de `curl`, incluindo as rotas publicas de cada fluxo): [GUIA_INTEGRACAO_FRONTEND_CLIENTE.md](GUIA_INTEGRACAO_FRONTEND_CLIENTE.md), [GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md](GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md) e [GUIA_INTEGRACAO_FRONTEND_PORTARIA.md](GUIA_INTEGRACAO_FRONTEND_PORTARIA.md).
 
 ## Setup local
 
@@ -69,6 +69,16 @@ npm install
 ```
 
 2. Copie `.env.example` para `.env` e ajuste as variaveis (`TICKET_QR_SECRET` e `JWT_SECRET` precisam de algum valor mesmo em dev — qualquer string serve localmente, so nao reuse o placeholder em producao).
+
+Pra gerar um valor aleatorio pra `JWT_SECRET`/`TICKET_QR_SECRET`, rode:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Cole o valor gerado na variavel correspondente do `.env` (rode o comando duas vezes se quiser um valor diferente pra cada uma).
+
+As variaveis `TMDB_*` precisam de uma API Key/token do TMDB — siga o passo a passo em [planning-back-end/teste-verzel-integracao-tmdb-v1.md](planning-back-end/teste-verzel-integracao-tmdb-v1.md) pra obter as credenciais.
 
 3. Suba um Postgres local com o banco `verzel_events`:
 
@@ -89,6 +99,8 @@ npm run prisma:generate
 ```bash
 npm run prisma:migrate
 ```
+
+Se o Prisma acusar erro de migration drift (divergencia entre o historico de migrations e o schema atual do banco), rode `npx prisma migrate reset` (recria o banco do zero) e depois repita o `npm run prisma:migrate`.
 
 6. Semeie os dados de teste (organizador, clientes, portaria, evento publicado com ingresso):
 
@@ -132,7 +144,7 @@ Consulte `.env.example`. Resumo do que cada uma faz:
 
 | Variavel | Uso |
 | --- | --- |
-| `DATABASE_URL` | connection string Postgres (`sslmode=require` em producao/Neon) |
+| `DATABASE_URL` | connection string Postgres (`sslmode=require` em producao, ver secao Deploy) |
 | `JWT_SECRET` | assina o token de sessao (`auth`) |
 | `TICKET_QR_SECRET` | assina o HMAC do QR do ingresso (`tickets`/`payments`/`gate`) — nunca reusar o placeholder de dev em producao |
 | `TMDB_BASE_URL`, `TMDB_ACCESS_TOKEN`, `TMDB_LANGUAGE`, `TMDB_REGION` | integracao com o catalogo TMDB (`catalog`/`events`) — o token fica so no backend |
@@ -141,37 +153,38 @@ Consulte `.env.example`. Resumo do que cada uma faz:
 
 ## Deploy
 
-Caminho usado neste projeto: **Neon** (Postgres) + **Render** (backend) + **Vercel** (frontend, fora deste repositorio).
+Caminho usado atualmente neste projeto: **Render** (Postgres + backend, os dois no mesmo provedor) + **Vercel** (frontend, fora deste repositorio).
 
-### 1. Banco (Neon)
+### 1. Banco (Render Postgres)
 
-1. Criar conta/projeto no [Neon](https://neon.tech) e um database `verzel_events`.
-2. O Neon oferece duas connection strings: pooled (via PgBouncer) e direct. Como este backend mantem pool proprio (`pg.Pool` via `@prisma/adapter-pg`), usar a **connection string direta** (nao a pooled) como `DATABASE_URL`, evitando pooling duplicado. `sslmode=require` (ja exigido pelo Neon).
+1. Na dashboard do Render, criar um banco gerenciado ("New > PostgreSQL"), plano free, mesma regiao do backend (evita latencia cross-region).
+2. O Render fornece uma "Internal Database URL" (uso interno, entre servicos Render na mesma regiao — mais rapida) e uma "External Database URL" (acessivel de fora, para rodar migrations/seed a partir da sua maquina). Use a interna como `DATABASE_URL` do servico da API (passo 2) e a externa localmente quando precisar (passo 3).
+3. Precisa de `?sslmode=require` na connection string, senao a conexao cai com `"Server has closed the connection"` (`P1017`/`ConnectionClosed`) — ver `.env.example`.
 
 ### 2. API (Render)
 
 Este repo tem um [`render.yaml`](render.yaml) (Blueprint) pronto na raiz — na dashboard do Render, escolha "New > Blueprint", conecte este repositorio no GitHub e clique em "Deploy Blueprint" em vez de configurar tudo manualmente.
 
-- **Build:** `npm install && npx prisma migrate deploy && npm run build` (`migrate deploy`, nao `migrate dev` — so aplica migrations ja existentes, nao gera novas).
+- **Build:** `npm install --include=dev && npx prisma migrate deploy && npm run build` (`migrate deploy`, nao `migrate dev` — so aplica migrations ja existentes, nao gera novas; `--include=dev` porque `NODE_ENV=production` no ambiente faz o `npm install` pular `devDependencies` por padrao, e `prisma`/`typescript` sao devDependencies aqui).
 - **Start:** `npm start`.
 - **Health check:** `/health`.
-- **Env vars:** `DATABASE_URL` (Neon, direta), `JWT_SECRET`, `TICKET_QR_SECRET`, `TMDB_ACCESS_TOKEN`, `FRONTEND_URL` (URL de producao do frontend na Vercel) ficam marcadas `sync: false` no blueprint — preencha uma vez na dashboard do Render, nunca vao pro Git. `TMDB_BASE_URL`, `TMDB_LANGUAGE`, `TMDB_REGION` e `NODE_ENV=production` ja vem com valor no blueprint.
+- **Env vars:** `DATABASE_URL` (Internal Database URL do Postgres do Render, passo 1), `JWT_SECRET`, `TICKET_QR_SECRET`, `TMDB_ACCESS_TOKEN`, `FRONTEND_URL` (URL de producao do frontend na Vercel) ficam marcadas `sync: false` no blueprint — preencha uma vez na dashboard do Render, nunca vao pro Git. `TMDB_BASE_URL`, `TMDB_LANGUAGE`, `TMDB_REGION` e `NODE_ENV=production` ja vem com valor no blueprint.
 
-**Aviso:** o plano free do Render "dorme" apos um tempo de inatividade — o primeiro request depois de um tempo parado demora alguns segundos a mais pra acordar. Nao e bug, e uma limitacao conhecida do plano gratuito.
+**Aviso:** o plano free do Render "dorme" apos um tempo de inatividade — o primeiro request depois de um tempo parado demora alguns segundos a mais pra acordar. Nao e bug, e uma limitacao conhecida do plano gratuito. Ha um workflow de keep-alive (`.github/workflows/keep-alive.yml`) que faz ping periodico no `/health` pra reduzir esse efeito durante avaliacao.
 
 ### 3. Seed em producao
 
-Depois do primeiro deploy, rode o seed uma vez localmente apontando pro Neon (mais simples e controlavel que rodar dentro do Render):
+Depois do primeiro deploy, rode o seed uma vez localmente apontando pro Postgres do Render (mais simples e controlavel que rodar dentro do proprio Render) — use a **External Database URL** (a interna so funciona de dentro da rede do Render):
 
 ```bash
-DATABASE_URL="<connection-string-direta-do-neon>" npm run prisma:seed
+DATABASE_URL="<external-database-url-do-render>?sslmode=require" npm run prisma:seed
 ```
 
 (No PowerShell: `$env:DATABASE_URL="..."; npm run prisma:seed`.)
 
 ### 4. Frontend (Vercel, fora deste repositorio)
 
-Aponte a variavel de ambiente da API do projeto Vercel para a URL de producao do backend no Render (`https://<seu-servico>.onrender.com/api`). Detalhes de integracao (autenticacao via cookie cross-site, endpoints, exemplos): [GUIA_INTEGRACAO_FRONTEND.md](GUIA_INTEGRACAO_FRONTEND.md#base-url-de-produção).
+Aponte a variavel de ambiente da API do projeto Vercel para a URL de producao do backend no Render (`https://<seu-servico>.onrender.com/api`). Detalhes de integracao (autenticacao via cookie cross-site, endpoints, exemplos), um guia por papel: [GUIA_INTEGRACAO_FRONTEND_CLIENTE.md](GUIA_INTEGRACAO_FRONTEND_CLIENTE.md#base-url-de-produção), [GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md](GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md#base-url-de-produção) e [GUIA_INTEGRACAO_FRONTEND_PORTARIA.md](GUIA_INTEGRACAO_FRONTEND_PORTARIA.md#base-url-de-produção).
 
 ## Uso de IA neste projeto
 

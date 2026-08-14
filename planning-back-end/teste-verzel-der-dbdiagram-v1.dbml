@@ -131,10 +131,11 @@ Table ticket_reservations {
   quantity int [not null]
   total_amount decimal [not null]
   expires_at timestamp
+  payment_attempts int [not null, default: 0]
   created_at timestamp [not null]
   updated_at timestamp [not null]
 
-  Note: 'UC10 - Reservar ingresso.'
+  Note: 'UC10 - Reservar ingresso. payment_attempts: ate 3 tentativas de pagamento por reserva (decisao pos-planejamento, ver payments/README.md).'
 }
 
 Table reservation_items {
@@ -166,6 +167,7 @@ Table tickets {
   reservation_id uuid [not null]
   customer_id uuid [not null]
   event_id uuid [not null]
+  event_seat_id uuid [not null, unique]
   code varchar [not null, unique]
   qr_token_hash varchar [not null]
   status ticket_status [not null]
@@ -173,7 +175,7 @@ Table tickets {
   issued_at timestamp [not null]
   created_at timestamp [not null]
 
-  Note: 'UC14 - Visualizar ingresso. QR Code deve usar codigo/token seguro.'
+  Note: 'UC14 - Visualizar ingresso. QR Code deve usar codigo/token seguro. event_seat_id: 1 ticket por assento (decisao pos-planejamento, ver payments/README.md).'
 }
 
 Table ticket_share_links {
@@ -212,6 +214,7 @@ Table gate_validations {
 // ticket_reservations 1 - N tickets
 // users(customer) 1 - N tickets
 // events 1 - N tickets
+// event_seats 1 - 0..1 tickets (1 ticket por assento)
 // tickets 1 - N ticket_share_links
 // tickets 0..1 - N gate_validations
 // users(gate) 1 - N gate_validations
@@ -228,6 +231,7 @@ Ref: simulated_payments.reservation_id > ticket_reservations.id
 Ref: tickets.reservation_id > ticket_reservations.id
 Ref: tickets.customer_id > users.id
 Ref: tickets.event_id > events.id
+Ref: tickets.event_seat_id > event_seats.id
 Ref: ticket_share_links.ticket_id > tickets.id
 Ref: gate_validations.ticket_id > tickets.id
 Ref: gate_validations.gate_user_id > users.id
