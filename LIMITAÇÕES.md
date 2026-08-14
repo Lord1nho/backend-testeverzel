@@ -1,0 +1,27 @@
+# Limitações do Projeto
+
+Durante o desenvolvimento e validação do projeto, foram identificadas algumas limitações e pontos que podem ser aprimorados em versões futuras.
+
+## 1. Persistência de Cookies em Produção
+
+Em ambiente de produção (deploy), foram observadas limitações relacionadas à persistência de cookies em determinados contextos de navegação privada e em navegadores iOS.
+
+Essa limitação pode afetar a persistência da sessão e, consequentemente, o fluxo de autenticação do usuário.
+
+## 2. Fallback para Bearer Token
+
+Como melhoria futura, pode ser implementado um mecanismo de **fallback utilizando Bearer Token**, permitindo maior compatibilidade em ambientes nos quais o armazenamento ou envio de cookies apresente restrições.
+
+Essa abordagem pode ser considerada principalmente para cenários como navegadores com políticas mais restritivas de cookies e determinados ambientes mobile.
+
+## 3. Rate Limiting no Backend
+
+Atualmente, o backend pode receber múltiplas requisições consecutivas sem uma política específica de **rate limiting** para determinados endpoints.
+
+Como melhoria, recomenda-se implementar limitação de requisições principalmente em operações sensíveis ou sujeitas a abuso, como:
+
+* **Login** — prevenção contra tentativas excessivas de autenticação;
+* **Pagamentos** — prevenção contra múltiplas solicitações indevidas;
+* **Reservas** — redução de requisições excessivas e possíveis abusos do fluxo de reserva.
+
+A implementação de rate limiting contribuiria para aumentar a segurança, estabilidade e resiliência da API.
