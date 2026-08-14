@@ -86,11 +86,13 @@ As variaveis `TMDB_*` precisam de uma API Key/token do TMDB — siga o passo a p
 
 3. Suba um Postgres local com o banco `verzel_events`:
 
+Instale o Docker Desktop, e execute ele antes de fazer os próximos passos.
+
 ```bash
 npm run db:up
 ```
 
-Isso sobe um container Docker (`docker-compose.yml`) com as mesmas credenciais do `.env.example`. Se preferir nao usar Docker, suba um Postgres local manualmente com o mesmo usuario/senha/porta/nome de banco.
+Isso sobe um container Docker (`docker-compose.yml`) com as mesmas credenciais do `.env.example`. Se preferir nao usar Docker, suba um Postgres local manualmente com o mesmo usuario/senha/porta/nome de banco. 
 
 4. Gere o Prisma Client:
 
