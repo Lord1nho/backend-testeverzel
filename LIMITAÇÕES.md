@@ -2,6 +2,10 @@
 
 Durante o desenvolvimento e validação do projeto, foram identificadas algumas limitações e pontos que podem ser aprimorados em versões futuras.
 
+>  **Aplicação em produção:** https://vzel-cinema.vercel.app/
+
+> ⚠️ **Observação:** o backend está hospedado no Render e pode entrar em modo *sleep* após um período de inatividade. Por isso, a primeira requisição após esse período pode demorar um pouco mais para responder. Após a inicialização do backend, as requisições seguintes tendem a responder normalmente.
+
 ## 1. Persistência de Cookies em Produção
 
 Em ambiente de produção (deploy), foram observadas limitações relacionadas à persistência de cookies em determinados contextos de navegação privada e em navegadores iOS.
