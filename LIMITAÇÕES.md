@@ -38,7 +38,7 @@ Caso o usuário realize uma nova reserva nessa segunda sessão, será necessári
 
 Essa limitação está relacionada ao gerenciamento de estado do checkout entre múltiplas sessões simultâneas e pode ser aprimorada futuramente para permitir a recuperação e sincronização de um checkout já iniciado.
 
-5. Paginação de Eventos
+## 5. Paginação de Eventos
 
 Como possibilidade de melhoria, pode ser implementada uma estratégia de paginação para os eventos exibidos na aplicação, contemplando tanto os eventos provenientes da API do TMDB quanto os eventos já publicados na plataforma.
 
