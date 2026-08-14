@@ -2,9 +2,9 @@
 
 Backend da Plataforma de Eventos e Ingressos do teste tecnico Verzel — API REST em Express/TypeScript/Prisma/Postgres, cobrindo autenticacao por papel, criacao e publicacao de eventos, reserva transacional de assentos, pagamento simulado, emissao de ingressos com QR e validacao na portaria.
 
->  **Aplicação em produção:** https://vzel-cinema.vercel.app/
+>  **[Acessar aplicação em produção](https://vzel-cinema.vercel.app/)**
 
-> ⚠️ **Observação:** o backend está hospedado no Render e pode entrar em modo *sleep* após um período de inatividade. Por isso, a primeira requisição após esse período pode demorar um pouco mais para responder. Após a inicialização do backend, as requisições seguintes tendem a responder normalmente.
+⚠️ **Observação:** o backend está hospedado no Render e pode entrar em modo *sleep* após um período de inatividade. Por isso, a primeira requisição após esse período pode demorar um pouco mais para responder. Após a inicialização do backend, as requisições seguintes tendem a responder normalmente.
 
 > **Qual branch usar:** a `master` (branch default deste repositorio) esta sempre atualizada com o codigo completo e funcional — e a branch recomendada pra clonar e rodar a aplicacao localmente. `dev` e `homolog` sao branches de trabalho/homologacao, nao precisam ser usadas so pra rodar o projeto.
 
