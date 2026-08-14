@@ -25,3 +25,11 @@ Como melhoria, recomenda-se implementar limitação de requisições principalme
 * **Reservas** — redução de requisições excessivas e possíveis abusos do fluxo de reserva.
 
 A implementação de rate limiting contribuiria para aumentar a segurança, estabilidade e resiliência da API.
+
+## 4. Checkout em Sessões Simultâneas
+
+Em cenários onde a mesma conta é utilizada em **dois logins ou sessões simultâneas**, o segundo login não é redirecionado automaticamente para um checkout que tenha sido iniciado anteriormente pela mesma conta.
+
+Caso o usuário realize uma nova reserva nessa segunda sessão, será necessário selecionar **outros assentos disponíveis**, mesmo que as duas sessões estejam vinculadas à mesma conta.
+
+Essa limitação está relacionada ao gerenciamento de estado do checkout entre múltiplas sessões simultâneas e pode ser aprimorada futuramente para permitir a recuperação e sincronização de um checkout já iniciado.
