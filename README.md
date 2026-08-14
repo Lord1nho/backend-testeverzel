@@ -2,6 +2,8 @@
 
 Backend da Plataforma de Eventos e Ingressos do teste tecnico Verzel — API REST em Express/TypeScript/Prisma/Postgres, cobrindo autenticacao por papel, criacao e publicacao de eventos, reserva transacional de assentos, pagamento simulado, emissao de ingressos com QR e validacao na portaria.
 
+> **Qual branch usar:** a `master` (branch default deste repositorio) esta sempre atualizada com o codigo completo e funcional — e a branch recomendada pra clonar e rodar a aplicacao localmente. `dev` e `homolog` sao branches de trabalho/homologacao, nao precisam ser usadas so pra rodar o projeto.
+
 ## Stack
 
 - Node.js
@@ -61,6 +63,8 @@ UC8 (busca/filtro de eventos) fica fora de escopo por decisao consciente do time
 Guias de integracao frontend, um por papel (endpoint a endpoint, com exemplos de `curl`, incluindo as rotas publicas de cada fluxo): [GUIA_INTEGRACAO_FRONTEND_CLIENTE.md](GUIA_INTEGRACAO_FRONTEND_CLIENTE.md), [GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md](GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md) e [GUIA_INTEGRACAO_FRONTEND_PORTARIA.md](GUIA_INTEGRACAO_FRONTEND_PORTARIA.md).
 
 ## Setup local
+
+Clone/checkout a `master` (ver nota no topo deste README) antes de seguir os passos abaixo.
 
 1. Instale dependencias:
 
