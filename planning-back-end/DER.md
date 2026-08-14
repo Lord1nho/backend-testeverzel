@@ -1,11 +1,12 @@
-# Teste Verzel - DER - Versão 2
+# DER
 
-Esta versão usa nomes técnicos em inglês para facilitar a codificação do back-end, front-end, ORM e banco de dados. A linguagem da aplicação e das explicações continua em português.
+Nomes técnicos em inglês para facilitar a codificação do back-end, front-end, ORM e banco de dados. A linguagem da aplicação e das explicações continua em português.
+
+> Atualizado para refletir `prisma/schema.prisma` como está hoje (pós-implementação) — ver "Alterações pós-planejamento" no fim do documento pra o que mudou desde a versão original.
 
 Arquivos relacionados:
 
 - `teste-verzel-casos-de-uso-textual-v1.md`
-- `teste-verzel-casos-de-uso-v1.md`
 - `teste-verzel-der-dbdiagram-v1.dbml`
 
 ## Convenção de Nomes
@@ -36,6 +37,7 @@ erDiagram
     varchar title
     varchar image_url
     text description
+    int duration_minutes
     json raw_payload
     timestamp created_at
   }
@@ -46,7 +48,8 @@ erDiagram
     uuid catalog_item_id FK
     varchar title
     timestamp starts_at
-    varchar location
+    enum venue
+    int room
     int capacity
     decimal price
     enum status
@@ -70,6 +73,7 @@ erDiagram
     int quantity
     decimal total_amount
     timestamp expires_at
+    int payment_attempts
     timestamp created_at
     timestamp updated_at
   }
@@ -99,6 +103,7 @@ erDiagram
     uuid reservation_id FK
     uuid customer_id FK
     uuid event_id FK
+    uuid event_seat_id FK
     varchar code UK
     varchar qr_token_hash
     enum status
@@ -138,6 +143,7 @@ erDiagram
   TICKET_RESERVATIONS ||--o{ TICKETS : "1 reservation issues 0..N tickets"
   USERS ||--o{ TICKETS : "1 customer owns 0..N tickets"
   EVENTS ||--o{ TICKETS : "1 event has 0..N tickets"
+  EVENT_SEATS ||--o| TICKETS : "1 seat is tied to 0..1 ticket"
   TICKETS ||--o{ TICKET_SHARE_LINKS : "1 ticket has 0..N links"
   TICKETS o|--o{ GATE_VALIDATIONS : "0..1 ticket receives 0..N validations"
   USERS ||--o{ GATE_VALIDATIONS : "1 gate user performs 0..N validations"
@@ -189,6 +195,7 @@ erDiagram
 | `TICKET_RESERVATIONS` -> `TICKETS` | 1 : 0..N | Reserva recusada gera zero ingressos; reserva aprovada gera um ou mais. |
 | `USERS` -> `TICKETS` | 1 : 0..N | Um Cliente pode possuir vários ingressos. |
 | `EVENTS` -> `TICKETS` | 1 : 0..N | Um evento pode ter vários ingressos emitidos. |
+| `EVENT_SEATS` -> `TICKETS` | 1 : 0..1 | Cada ingresso emitido aponta pro assento exato que ocupa (`Ticket.eventSeatId`) — uma reserva com vários assentos gera um ticket por assento, não um ticket por reserva. |
 | `TICKETS` -> `TICKET_SHARE_LINKS` | 1 : 0..N | Um ingresso pode ter vários links gerados ou nenhum. |
 | `TICKETS` -> `GATE_VALIDATIONS` | 0..1 : 0..N | Validação inválida pode não encontrar ingresso; ingresso existente pode ter várias tentativas. |
 | `USERS` -> `GATE_VALIDATIONS` | 1 : 0..N | Um usuário Portaria pode realizar várias validações. |
@@ -207,3 +214,10 @@ erDiagram
   - QR Code/token validado no servidor;
   - bloqueio de ingresso já utilizado.
 - O arquivo `teste-verzel-der-dbdiagram-v1.dbml` pode ser colado diretamente no dbdiagram.io.
+
+## Alterações pós-planejamento
+
+Duas mudanças de schema surgiram durante a implementação, depois desta versão original do DER, e já estão refletidas acima e no `.dbml`:
+
+- **`TICKETS.event_seat_id`** (FK pra `EVENT_SEATS`): o desenho original ligava `TICKETS` só à reserva (`reservation_id`). Durante a implementação de `payments`, ficou claro que a portaria e a tela "Meus ingressos" precisam saber diretamente qual assento cada ticket ocupa — uma reserva com vários assentos emite um ticket por assento, não um por reserva. Ver [src/modules/payments/README.md](../src/modules/payments/README.md).
+- **`TICKET_RESERVATIONS.payment_attempts`**: decisão de checkout tomada antes da implementação de `payments` — a reserva aceita até 3 tentativas de pagamento; esse contador é o que decide quando a reserva fecha de vez (`PAYMENT_DECLINED`) e libera o assento. Ver [src/modules/payments/README.md](../src/modules/payments/README.md) e `USO_DE_IA.md` na raiz.

@@ -18,7 +18,16 @@ export function validateRequest(schemas: RequestSchemas): RequestHandler {
     }
 
     if (schemas.query) {
-      request.query = schemas.query.parse(request.query) as typeof request.query;
+      // Express 5 expoe `request.query` como getter sem setter (derivado do
+      // parser de query string interno) -- reatribuir direto lanca
+      // "Cannot set property query of #<IncomingMessage> which has only a
+      // getter". Redefinir a propriedade na instancia contorna isso.
+      Object.defineProperty(request, "query", {
+        value: schemas.query.parse(request.query),
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
     }
 
     next();
