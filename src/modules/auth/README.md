@@ -33,7 +33,9 @@ Autentica um usuario ja existente e entrega um token de acesso via cookie httpOn
 }
 ```
 
-O token **nao vem no corpo da resposta** — ele e entregue automaticamente pelo header `Set-Cookie` num cookie chamado `access_token`, com `httpOnly`, `sameSite=Lax`, `secure` (true em producao) e `maxAge` de 1 dia (batendo com a expiracao do JWT). Por ser `httpOnly`, o JavaScript do frontend nao consegue ler nem manipular esse cookie diretamente — ele so anda junto automaticamente nas proximas requisicoes ao backend.
+O token **nao vem no corpo da resposta** — ele e entregue automaticamente pelo header `Set-Cookie` num cookie chamado `access_token`, com `httpOnly`, `secure` (true em producao) e `maxAge` de 1 dia (batendo com a expiracao do JWT). `sameSite` e condicional: `none` em producao (obrigatorio pro cookie sobreviver a um request cross-site, front e back em dominios diferentes) e `lax` em dev (front e back no mesmo `localhost`). Por ser `httpOnly`, o JavaScript do frontend nao consegue ler nem manipular esse cookie diretamente — ele so anda junto automaticamente nas proximas requisicoes ao backend.
+
+**Limitacao conhecida:** `sameSite=none` em producao e bloqueado por padrao pelos navegadores em aba anonima/privada e, criticamente, em **todo** navegador no iOS (WebKit forca ITP mesmo no Chrome/Firefox pra iOS). Nesses casos o cookie nunca chega, e o login falha silenciosamente do ponto de vista do frontend. O fallback via header `Authorization: Bearer <token>` (ver abaixo) ja existe no middleware, mas o login ainda nao devolve o token no corpo da resposta pra habilitar esse caminho — ver to-do do backend.
 
 Alternativamente, rotas protegidas tambem aceitam `Authorization: Bearer <token>` — util para clientes que nao usam cookies (curl, Postman, apps mobile). Se ambos forem enviados, o **header tem prioridade** sobre o cookie.
 

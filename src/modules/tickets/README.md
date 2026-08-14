@@ -56,7 +56,7 @@ UC15 (lado de quem recebe o link). Sem autenticação. Usa o `token` puro devolv
 
 `qrValue` = `` `${code}.${hmac}` `` (`buildQrValue`). `code` (curto, `@unique`) permite achar o ingresso rápido; o HMAC garante autenticidade.
 
-**Formato esperado pelo futuro módulo `gate` (UC16-20, fora do escopo aqui):** ler o QR, separar `code` do HMAC, achar o `Ticket` pelo `code`, recalcular `signTicketQr(ticket.id)` e comparar com o HMAC lido — se bater, autêntico; se não, `INVALID`. Validação manual (`código digitado na portaria`) usa só o `code`.
+**Formato consumido pelo módulo `gate` (UC16-20, ver [src/modules/gate/README.md](../gate/README.md)):** ler o QR, separar `code` do HMAC, achar o `Ticket` pelo `code`, recalcular `signTicketQr(ticket.id)` e comparar com o HMAC lido — se bater, autêntico; se não, `INVALID`. Validação manual (`código digitado na portaria`) usa só o `code`.
 
 ## Erros comuns
 
@@ -79,4 +79,4 @@ UC15 (lado de quem recebe o link). Sem autenticação. Usa o `token` puro devolv
 
 ## Testes
 
-`tests/tickets.test.ts` cobre o fluxo ponta a ponta (evento -> reserva -> pagamento aprovado -> `GET /api/tickets` lista -> `GET /api/tickets/:id` mostra `qrValue` e o assento certo), 404 pra ingresso de outro cliente, `POST /:id/share` + `GET /api/public/tickets/:token` funcionando sem autenticação, e token inexistente/inválido retornando 404. O cenário "ingresso usado não pode ser usado de novo" (skill `reserva-segura`) fica pro módulo `gate`, ainda não implementado — não há ação de "marcar como usado" nesta rodada.
+`tests/tickets.test.ts` cobre o fluxo ponta a ponta (evento -> reserva -> pagamento aprovado -> `GET /api/tickets` lista -> `GET /api/tickets/:id` mostra `qrValue` e o assento certo), 404 pra ingresso de outro cliente, `POST /:id/share` + `GET /api/public/tickets/:token` funcionando sem autenticação, e token inexistente/inválido retornando 404. O cenário "ingresso usado não pode ser usado de novo" (skill `reserva-segura`) é coberto em `tests/gate.test.ts`, no módulo `gate` — é lá que a ação de "marcar como usado" acontece.

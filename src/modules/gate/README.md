@@ -86,7 +86,7 @@ Todo caminho grava uma linha em `GateValidation` (`ticketId` — `null` se o có
 
 - `gate.schemas.ts` — validação Zod do corpo de `/validate` (`eventId`, `code`, `token` opcional) e do param `code` de `GET /tickets/:code/event`.
 - `gate.repository.ts` — único lugar que importa `prisma` neste módulo. `findTicketByCode` (usado por `validateTicket` e por `resolveTicketEvent`), `logValidation`, `markUsedAndLog` (a transação condicional + log).
-- `gate.service.ts` — `validateTicket` (os 6 passos acima) e `resolveTicketEvent` (busca por `code`, 404 se não achar, devolve o evento).
+- `gate.service.ts` — `validateTicket` (os 7 passos acima) e `resolveTicketEvent` (busca por `code`, 404 se não achar, devolve o evento).
 - `gate.mappers.ts` — `toValidationResponse`, `toTicketEventSummary`.
 - `gate.controller.ts` — 2 handlers finos.
 

@@ -6,7 +6,7 @@ Esta pasta concentra os artefatos mais úteis para implementar regras de negóci
 
 - `CLAUDE_BACKEND.md`: contexto e orientações para desenvolvimento do back-end.
 - `teste-verzel-casos-de-uso-textual-v1.md`: regras e fluxos que o back-end precisa garantir.
-- `teste-verzel-der-e-classes-v2.md`: DER com nomes técnicos em inglês.
+- `DER.md`: DER com nomes técnicos em inglês.
 - `teste-verzel-der-dbdiagram-v1.dbml`: versão DBML para visualizar no dbdiagram.io.
 - `teste-verzel-integracao-tmdb-v1.md`: documentação da integração com TMDB.
 

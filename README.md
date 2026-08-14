@@ -58,7 +58,7 @@ route -> controller -> service/use-case -> repository -> Prisma/Postgres
 
 UC8 (busca/filtro de eventos) fica fora de escopo por decisao consciente do time — ver os READMEs de `events`.
 
-Guia completo do fluxo do Cliente (endpoint a endpoint, com exemplos de `curl`): [GUIA_INTEGRACAO_FRONTEND.md](GUIA_INTEGRACAO_FRONTEND.md).
+Guias de integracao frontend, um por papel (endpoint a endpoint, com exemplos de `curl`, incluindo as rotas publicas de cada fluxo): [GUIA_INTEGRACAO_FRONTEND_CLIENTE.md](GUIA_INTEGRACAO_FRONTEND_CLIENTE.md), [GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md](GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md) e [GUIA_INTEGRACAO_FRONTEND_PORTARIA.md](GUIA_INTEGRACAO_FRONTEND_PORTARIA.md).
 
 ## Setup local
 
@@ -69,6 +69,16 @@ npm install
 ```
 
 2. Copie `.env.example` para `.env` e ajuste as variaveis (`TICKET_QR_SECRET` e `JWT_SECRET` precisam de algum valor mesmo em dev — qualquer string serve localmente, so nao reuse o placeholder em producao).
+
+Pra gerar um valor aleatorio pra `JWT_SECRET`/`TICKET_QR_SECRET`, rode:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Cole o valor gerado na variavel correspondente do `.env` (rode o comando duas vezes se quiser um valor diferente pra cada uma).
+
+As variaveis `TMDB_*` precisam de uma API Key/token do TMDB — siga o passo a passo em [planning-back-end/teste-verzel-integracao-tmdb-v1.md](planning-back-end/teste-verzel-integracao-tmdb-v1.md) pra obter as credenciais.
 
 3. Suba um Postgres local com o banco `verzel_events`:
 
@@ -89,6 +99,8 @@ npm run prisma:generate
 ```bash
 npm run prisma:migrate
 ```
+
+Se o Prisma acusar erro de migration drift (divergencia entre o historico de migrations e o schema atual do banco), rode `npx prisma migrate reset` (recria o banco do zero) e depois repita o `npm run prisma:migrate`.
 
 6. Semeie os dados de teste (organizador, clientes, portaria, evento publicado com ingresso):
 
@@ -171,7 +183,7 @@ DATABASE_URL="<connection-string-direta-do-neon>" npm run prisma:seed
 
 ### 4. Frontend (Vercel, fora deste repositorio)
 
-Aponte a variavel de ambiente da API do projeto Vercel para a URL de producao do backend no Render (`https://<seu-servico>.onrender.com/api`). Detalhes de integracao (autenticacao via cookie cross-site, endpoints, exemplos): [GUIA_INTEGRACAO_FRONTEND.md](GUIA_INTEGRACAO_FRONTEND.md#base-url-de-produção).
+Aponte a variavel de ambiente da API do projeto Vercel para a URL de producao do backend no Render (`https://<seu-servico>.onrender.com/api`). Detalhes de integracao (autenticacao via cookie cross-site, endpoints, exemplos), um guia por papel: [GUIA_INTEGRACAO_FRONTEND_CLIENTE.md](GUIA_INTEGRACAO_FRONTEND_CLIENTE.md#base-url-de-produção), [GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md](GUIA_INTEGRACAO_FRONTEND_ORGANIZADOR.md#base-url-de-produção) e [GUIA_INTEGRACAO_FRONTEND_PORTARIA.md](GUIA_INTEGRACAO_FRONTEND_PORTARIA.md#base-url-de-produção).
 
 ## Uso de IA neste projeto
 

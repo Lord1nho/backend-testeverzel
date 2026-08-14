@@ -1,5 +1,7 @@
 # Teste Verzel - Integracao TMDB - Versao 1
 
+> **Nota:** implementado com pequenos ajustes em relacao ao planejado aqui (rotas, autorizacao por papel, campo `durationMinutes`) -- ver [`catalog/README.md`](../src/modules/catalog/README.md).
+
 Este artefato define o minimo necessario para integrar o TMDB ao projeto da Plataforma de Eventos e Ingressos.
 
 Fontes oficiais consultadas:

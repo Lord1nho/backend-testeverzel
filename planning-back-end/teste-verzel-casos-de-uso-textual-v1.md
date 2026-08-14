@@ -366,6 +366,7 @@ Reservar ingresso para um evento publicado.
 - Assento ou quantidade indisponivel: o sistema informa indisponibilidade e impede a reserva.
 - Pagamento recusado: o sistema nao emite ingresso e libera a disponibilidade reservada, se houver bloqueio temporario.
 - Evento esgotado: o sistema impede a reserva.
+- **Cancelamento pelo Cliente antes de pagar** (implementado alem do desenho original): o Cliente pode desistir da reserva antes de qualquer tentativa de pagamento, liberando os assentos na hora, sem precisar esperar expiracao. Ver `POST /api/reservations/:id/cancel` em [src/modules/reservations/README.md](../src/modules/reservations/README.md).
 
 ### Regras de Negocio
 
@@ -434,6 +435,7 @@ Processar a cobranca da reserva em modo simulado ou sandbox, sem transacao finan
 - A regra de negocio da reserva nao deve depender diretamente de um gateway especifico. O sistema deve tratar apenas o resultado normalizado do pagamento: aprovado ou recusado.
 - Pagamento aprovado confirma a reserva e permite emissao do ingresso.
 - Pagamento recusado nao emite ingresso e deve liberar a disponibilidade previamente bloqueada, se houver bloqueio temporario.
+- **Decisao tomada antes da implementacao**: a reserva aceita ate 3 tentativas de pagamento, nao so uma. Nas tentativas 1 e 2, uma recusa mantem o assento bloqueado (o Cliente tenta de novo na mesma reserva); so a 3a recusa fecha a reserva de vez e libera o assento. Excecao deliberada e restrita a este fluxo — nao se aplica a nenhuma outra regra de liberacao de assento do sistema. Ver `payment_attempts` no DER e [src/modules/payments/README.md](../src/modules/payments/README.md).
 
 ### Decisao de Escopo
 
@@ -565,6 +567,7 @@ Validar um ingresso na entrada do evento.
 - O mesmo ingresso nao pode ser validado duas vezes.
 - A validacao deve ser feita no back-end.
 - A tela deve apresentar retorno claro para a Portaria.
+- **Janela de entrada da sessao** (implementado alem do desenho original): a entrada so e liberada a partir de 20 minutos antes do inicio da sessao ate o fim dela (horario de inicio + duracao do filme, sem bloqueio por entrar depois do horario exato de inicio). Fora dessa janela (data errada ou sessao ja encerrada), o resultado e invalido, com motivo especifico. Ver [src/modules/gate/README.md](../src/modules/gate/README.md).
 
 ## UC17 - Ler QR Code pela Camera
 
@@ -689,6 +692,8 @@ Para o MVP, ha duas opcoes aceitaveis:
 - entrada manual: a Portaria valida, confere os dados e clica em registrar entrada.
 
 A versao atual do diagrama mantem Registrar entrada como caso de uso separado. Se a implementacao optar por entrada automatica, este caso pode ser incorporado ao UC16 - Validar ingresso em uma versao futura do diagrama.
+
+**Decisao tomada:** entrada automatica. Validar como valido ja marca o ingresso como utilizado no mesmo request — nao existe uma segunda chamada de "registrar entrada" separada. Na pratica, este UC20 esta incorporado ao fluxo de UC16 (`POST /api/gate/validate`), como a nota acima ja previa. Ver [src/modules/gate/README.md](../src/modules/gate/README.md), secao "Decisão de escopo: entrada automática".
 
 ## Rastreabilidade com Requisitos do Desafio
 
