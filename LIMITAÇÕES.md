@@ -37,3 +37,14 @@ Em cenários onde a mesma conta é utilizada em **dois logins ou sessões simult
 Caso o usuário realize uma nova reserva nessa segunda sessão, será necessário selecionar **outros assentos disponíveis**, mesmo que as duas sessões estejam vinculadas à mesma conta.
 
 Essa limitação está relacionada ao gerenciamento de estado do checkout entre múltiplas sessões simultâneas e pode ser aprimorada futuramente para permitir a recuperação e sincronização de um checkout já iniciado.
+
+5. Paginação de Eventos
+
+Como possibilidade de melhoria, pode ser implementada uma estratégia de paginação para os eventos exibidos na aplicação, contemplando tanto os eventos provenientes da API do TMDB quanto os eventos já publicados na plataforma.
+
+A paginação permitiria:
+
+Carregar os eventos do TMDB de forma incremental;
+Evitar o carregamento de uma grande quantidade de registros em uma única requisição;
+Facilitar a navegação entre diferentes páginas de eventos publicados;
+Melhorar o desempenho e a experiência do usuário em catálogos maiores.
